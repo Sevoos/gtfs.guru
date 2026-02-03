@@ -1,12 +1,12 @@
-"""GTFS Validator - Fast GTFS validation in Python.
+"""GTFS Guru - Fast GTFS validation in Python.
 
 Example:
-    >>> import gtfs_validator
-    >>> result = gtfs_validator.validate("/path/to/gtfs.zip")
+    >>> import gtfs_guru
+    >>> result = gtfs_guru.validate("/path/to/gtfs.zip")
     >>> print(f"Valid: {result.is_valid}, Errors: {result.error_count}")
 """
 
-from .gtfs_validator import (
+from .gtfs_guru import (
     Notice,
     ProgressInfo,
     ValidationResult,

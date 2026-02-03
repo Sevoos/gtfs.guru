@@ -1,4 +1,4 @@
-"""GTFS Validator Python bindings - Type stubs."""
+"""GTFS Guru Python bindings - Type stubs."""
 
 from typing import Any, Callable, Optional
 
@@ -169,8 +169,8 @@ def validate(
         ValueError: If the path is invalid or the feed cannot be loaded.
 
     Example:
-        >>> import gtfs_validator
-        >>> result = gtfs_validator.validate("/path/to/gtfs.zip")
+        >>> import gtfs_guru
+        >>> result = gtfs_guru.validate("/path/to/gtfs.zip")
         >>> print(f"Valid: {result.is_valid}")
         >>> for error in result.errors():
         ...     print(f"{error.code}: {error.message}")
@@ -199,7 +199,7 @@ async def validate_async(
         async def on_progress(info: ProgressInfo):
             print(f"{info.stage}: {info.current}/{info.total}")
         
-        result = await gtfs_validator.validate_async(
+        result = await gtfs_guru.validate_async(
             "/path/to/feed.zip",
             on_progress=on_progress
         )

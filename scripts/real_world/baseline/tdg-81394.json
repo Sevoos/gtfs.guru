@@ -1,0 +1,78 @@
+{
+  "feed_id": "tdg-81394",
+  "dataset_id": "tdg-81394-202608130137",
+  "counts": {
+    "errors": 72455,
+    "warnings": 14788,
+    "infos": 5
+  },
+  "features": [
+    "Bike Allowed",
+    "Feed Information",
+    "Fixed-Stops Demand Responsive Transit",
+    "Location Types",
+    "Predefined Routes with Deviation",
+    "Route-Based Fares",
+    "Stops Wheelchair Accessibility",
+    "Trips Wheelchair Accessibility",
+    "Zone-Based Demand Responsive Services"
+  ],
+  "notices": {
+    "big_gap_in_service": {
+      "severity": "INFO",
+      "total": 4
+    },
+    "expired_calendar": {
+      "severity": "WARNING",
+      "total": 6
+    },
+    "fast_travel_between_consecutive_stops": {
+      "severity": "WARNING",
+      "total": 12
+    },
+    "feed_expiration_date30_days": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "geo_json_duplicated_element": {
+      "severity": "ERROR",
+      "total": 6
+    },
+    "mixed_case_recommended_field": {
+      "severity": "WARNING",
+      "total": 14359
+    },
+    "stop_time_timepoint_without_times": {
+      "severity": "ERROR",
+      "total": 72246
+    },
+    "stop_time_with_arrival_before_previous_departure_time": {
+      "severity": "ERROR",
+      "total": 203
+    },
+    "stop_without_stop_time": {
+      "severity": "WARNING",
+      "total": 409
+    },
+    "trip_coverage_not_active_for_next7_days": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "unknown_column": {
+      "severity": "INFO",
+      "total": 1
+    }
+  },
+  "perf": {
+    "wall_seconds": 2.465,
+    "peak_rss_mb": 189.7,
+    "threads": 1,
+    "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
+  },
+  "last_change": {
+    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
+    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "validator_version": "1.0.0",
+    "host_platform": "linux"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "feed_id": "mdb-470",
+  "dataset_id": "mdb-470-202603050033",
+  "counts": {
+    "errors": 0,
+    "warnings": 683,
+    "infos": 4
+  },
+  "features": [
+    "Bike Allowed",
+    "Fare Products",
+    "Fare Transfers",
+    "Headsigns",
+    "In-station Traversal Time",
+    "Levels",
+    "Location Types",
+    "Pathway Connections",
+    "Pathway Signs",
+    "Rider Categories",
+    "Route Colors",
+    "Route-Based Fares",
+    "Shapes",
+    "Stops Wheelchair Accessibility",
+    "Trips Wheelchair Accessibility"
+  ],
+  "notices": {
+    "equal_shape_distance_same_coordinates": {
+      "severity": "WARNING",
+      "total": 73
+    },
+    "missing_recommended_file": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "mixed_case_recommended_field": {
+      "severity": "WARNING",
+      "total": 573
+    },
+    "route_short_name_too_long": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "stop_too_far_from_shape_using_user_distance": {
+      "severity": "WARNING",
+      "total": 35
+    },
+    "unknown_column": {
+      "severity": "INFO",
+      "total": 2
+    },
+    "unknown_file": {
+      "severity": "INFO",
+      "total": 2
+    }
+  },
+  "perf": {
+    "wall_seconds": 0.061,
+    "peak_rss_mb": 25.2,
+    "threads": 1,
+    "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
+  },
+  "last_change": {
+    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
+    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "validator_version": "1.0.0",
+    "host_platform": "linux"
+  }
+}

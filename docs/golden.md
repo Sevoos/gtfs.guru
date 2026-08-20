@@ -3,6 +3,12 @@
 This repo includes helper scripts to compare Rust outputs against expected
 baselines (for parity checks with Java or other references).
 
+This suite pins byte-exact output on small controlled fixtures. For real
+MobilityData feeds -- rare flexible-service, fares and pathway combinations at
+sizes up to 229 MiB, compared at notice-fingerprint rather than byte level --
+see `docs/real-world-parity.md`. The two are complementary: this one catches an
+exact output change, that one catches an ecosystem-wide regression.
+
 ## Core scripts
 - `scripts/compare_reports.py`: compare `report.json`, `system_errors.json`, and HTML.
 - `scripts/run_golden_compare.sh` / `scripts/run_golden_compare.py`: run one case.

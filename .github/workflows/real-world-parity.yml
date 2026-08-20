@@ -1,0 +1,187 @@
+name: Real-World Parity
+
+# Two speeds, because the two questions cost very different amounts:
+#
+#   self  gtfs.guru alone over the pinned corpus, compared with the committed
+#         baseline. Catches crashes, parse failures and notice drift on real
+#         feeds. Roughly a minute once the corpus cache is warm, so it can
+#         afford to run on every pull request and every push to main.
+#   full  adds the pinned MobilityData/gtfs-validator baseline for a genuine
+#         cross-validator comparison plus timing and memory tables. Tens of
+#         minutes, so it runs on release tags, weekly, and on demand.
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "self or full"
+        type: string
+        default: full
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Which comparison to run"
+        type: choice
+        options: [self, full]
+        default: full
+  push:
+    branches: ["main"]
+    paths:
+      - "crates/gtfs_model/**"
+      - "crates/gtfs_validator_cli/**"
+      - "crates/gtfs_validator_core/**"
+      - "crates/gtfs_validator_report/**"
+      - "scripts/real_world/**"
+      - "scripts/real_world_corpus.py"
+      - "scripts/real_world_parity.py"
+      - "scripts/ci_real_world.sh"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - ".github/workflows/real-world-parity.yml"
+  pull_request:
+    paths:
+      - "crates/gtfs_model/**"
+      - "crates/gtfs_validator_cli/**"
+      - "crates/gtfs_validator_core/**"
+      - "crates/gtfs_validator_report/**"
+      - "scripts/real_world/**"
+      - "scripts/real_world_corpus.py"
+      - "scripts/real_world_parity.py"
+      - "scripts/ci_real_world.sh"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - ".github/workflows/real-world-parity.yml"
+  schedule:
+    # Mondays 05:00 UTC. Prophylactic: the corpus is frozen, but the upstream
+    # validator, the datasets and the runner image are not.
+    - cron: "0 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-world-${{ github.ref }}-${{ inputs.mode || github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        # Full history so 'impact' can diff baselines against the previous tag.
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Decide mode
+        id: mode
+        run: |
+          mode="${{ inputs.mode }}"
+          if [ -z "$mode" ]; then
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              mode=full
+            else
+              mode=self
+            fi
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Running in '$mode' mode"
+
+      - name: Compute cache keys
+        id: keys
+        # Key each cache on what it actually holds, not on the file that
+        # happens to describe it: editing a rationale string must not evict
+        # 73 MiB of feeds, and editing a gate threshold must not evict a 40 MiB
+        # jar that did not change.
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import hashlib, json
+          feeds = json.load(open("scripts/real_world/corpus.json"))["feeds"]
+          ident = "".join(
+              f"{f['dataset_id']}:{f['sha256']}\n"
+              for f in sorted(feeds, key=lambda f: f["dataset_id"])
+          )
+          print("corpus=" + hashlib.sha256(ident.encode()).hexdigest()[:32])
+          pin = json.load(open("scripts/real_world/gate.json"))["java_baseline"]
+          print(f"jar={pin['release_tag']}-{pin['sha256'][:16]}")
+          PY
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release CLI
+        run: cargo build --release -p gtfs-guru
+
+      - name: Restore corpus cache
+        uses: actions/cache@v4
+        with:
+          path: benchmark-feeds/real-world
+          key: real-world-corpus-${{ steps.keys.outputs.corpus }}
+
+      - name: Set up Java
+        if: steps.mode.outputs.mode == 'full'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Restore Java baseline cache
+        if: steps.mode.outputs.mode == 'full'
+        uses: actions/cache@v4
+        with:
+          path: benchmark-feeds/*.jar
+          key: gtfs-validator-jar-${{ steps.keys.outputs.jar }}
+
+      - name: Real-world parity
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+          GTFS_VALIDATOR_BIN: ./target/release/gtfs-guru
+          GITHUB_TOKEN: ${{ github.token }}
+        run: scripts/ci_real_world.sh
+
+      - name: Upstream drift check
+        # Informational only: a newer dataset or validator release is news, not
+        # a defect. Re-pinning is always a deliberate, reviewable commit.
+        if: always() && (github.event_name == 'schedule' || steps.mode.outputs.mode == 'full')
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## Upstream drift"
+            echo '```'
+            python3 scripts/real_world_corpus.py check-updates --catalog || true
+            python3 scripts/real_world_parity.py jar --check-only --check-latest || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Release impact report
+        if: always() && steps.mode.outputs.mode == 'full'
+        continue-on-error: true
+        run: |
+          python3 scripts/real_world_parity.py impact \
+            --out real_world_actual/real-world-impact.md || true
+          if [ -f real_world_actual/real-world-impact.md ]; then
+            cat real_world_actual/real-world-impact.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload parity artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-world-parity-${{ steps.mode.outputs.mode }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            real_world_actual/results.json
+            real_world_actual/gate.json
+            real_world_actual/summary.md
+            real_world_actual/real-world-impact.md
+            real_world_actual/**/*.log

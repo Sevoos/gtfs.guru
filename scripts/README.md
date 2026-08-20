@@ -41,6 +41,27 @@ Golden tests compare validator output against expected reference files.
 | `update_expected_from_manifest.py` | Updates expected outputs from actual validator results. |
 | `compare_reports.py` | Compares two validator output directories (JSON + HTML). |
 
+## Real-World Parity
+
+Ecosystem checks against twelve pinned MobilityData datasets (flexible services,
+Fares v2, pathways; 31 KiB to 229 MiB unpacked). The feed `.zip` files are never
+committed. See `docs/real-world-parity.md`.
+
+| Script | Description |
+|--------|-------------|
+| `real_world_corpus.py` | Fetches, verifies and drift-checks the pinned corpus; prints the coverage matrix. |
+| `real_world_parity.py` | Runs both validators, gates the result, renders reports, updates baselines, and builds the release impact report. |
+| `ci_real_world.sh` | CI wrapper; `MODE=self` for per-commit, `MODE=full` to add the Java baseline. |
+
+### Real-World Parity Data Files
+
+| File | Description |
+|------|-------------|
+| `real_world/corpus.json` | Pinned feeds with dataset ids, hashes, sizes and per-feed rationale. |
+| `real_world/gate.json` | Java baseline pin, timeouts, performance thresholds and gate weights. |
+| `real_world/expected_deltas.json` | Approved gtfs.guru vs Java differences. |
+| `real_world/baseline/*.json` | Per-feed committed notice fingerprints and counts. |
+
 ### Golden Test Configuration Files
 
 | File | Description |

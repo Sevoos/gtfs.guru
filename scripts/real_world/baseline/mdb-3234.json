@@ -1,0 +1,75 @@
+{
+  "feed_id": "mdb-3234",
+  "dataset_id": "mdb-3234-202606301640",
+  "counts": {
+    "errors": 13,
+    "warnings": 335,
+    "infos": 90
+  },
+  "features": [
+    "Bike Allowed",
+    "Booking Rules",
+    "Fixed-Stops Demand Responsive Transit",
+    "Frequencies",
+    "Headsigns",
+    "Location Types",
+    "Shapes",
+    "Stops Wheelchair Accessibility",
+    "Transfers",
+    "Trips Wheelchair Accessibility"
+  ],
+  "notices": {
+    "expired_calendar": {
+      "severity": "WARNING",
+      "total": 4
+    },
+    "invalid_url": {
+      "severity": "ERROR",
+      "total": 1
+    },
+    "missing_pickup_drop_off_booking_rule_id": {
+      "severity": "WARNING",
+      "total": 12
+    },
+    "missing_prior_notice_duration_min": {
+      "severity": "ERROR",
+      "total": 12
+    },
+    "missing_recommended_file": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "mixed_case_recommended_field": {
+      "severity": "WARNING",
+      "total": 13
+    },
+    "non_ascii_or_non_printable_char": {
+      "severity": "WARNING",
+      "total": 297
+    },
+    "platform_without_parent_station": {
+      "severity": "INFO",
+      "total": 90
+    },
+    "service_has_no_active_day_of_the_week": {
+      "severity": "WARNING",
+      "total": 7
+    },
+    "trip_coverage_not_active_for_next7_days": {
+      "severity": "WARNING",
+      "total": 1
+    }
+  },
+  "perf": {
+    "wall_seconds": 0.044,
+    "peak_rss_mb": 25.1,
+    "threads": 1,
+    "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
+  },
+  "last_change": {
+    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
+    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "validator_version": "1.0.0",
+    "host_platform": "linux"
+  }
+}

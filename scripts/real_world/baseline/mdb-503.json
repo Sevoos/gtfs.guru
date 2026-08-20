@@ -1,0 +1,68 @@
+{
+  "feed_id": "mdb-503",
+  "dataset_id": "mdb-503-202608120101",
+  "counts": {
+    "errors": 0,
+    "warnings": 9,
+    "infos": 3
+  },
+  "features": [
+    "Bike Allowed",
+    "Contactless EMV Support",
+    "Fare Media",
+    "Fare Products",
+    "Fare Transfers",
+    "Feed Information",
+    "Headsigns",
+    "Rider Categories",
+    "Route Colors",
+    "Shapes",
+    "Stops Wheelchair Accessibility",
+    "Time-Based Fares",
+    "Transfers",
+    "Trips Wheelchair Accessibility",
+    "Zone-Based Fares"
+  ],
+  "notices": {
+    "big_gap_in_service": {
+      "severity": "INFO",
+      "total": 1
+    },
+    "expired_calendar": {
+      "severity": "WARNING",
+      "total": 2
+    },
+    "feed_expiration_date30_days": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "missing_feed_contact_email_and_url": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "route_long_name_contains_short_name": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "stop_too_far_from_shape": {
+      "severity": "WARNING",
+      "total": 4
+    },
+    "unknown_file": {
+      "severity": "INFO",
+      "total": 2
+    }
+  },
+  "perf": {
+    "wall_seconds": 0.219,
+    "peak_rss_mb": 49.1,
+    "threads": 1,
+    "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
+  },
+  "last_change": {
+    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
+    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "validator_version": "1.0.0",
+    "host_platform": "linux"
+  }
+}

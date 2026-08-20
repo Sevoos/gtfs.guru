@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "description": "Approved differences between gtfs.guru and MobilityData/gtfs-validator on the pinned real-world corpus. An entry documents a difference the project has decided to accept or has not triaged yet; anything not listed here is a parity regression. Totals are pinned, so a difference that changes size loses its approval and resurfaces. Use \"absent\" when a validator does not emit the code at all, and omit a total to accept any value. See docs/real-world-parity.md.",
+  "entries": [
+    {
+      "feed_id": "mdb-3234",
+      "code": "leading_or_trailing_whitespaces",
+      "severity": "WARNING",
+      "java_total": 1,
+      "guru_total": "absent",
+      "triaged": false,
+      "added": "2026-08-14",
+      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru does not report the whitespace this feed carries. Not yet triaged."
+    },
+    {
+      "feed_id": "mdb-3234",
+      "code": "missing_pickup_drop_off_booking_rule_id",
+      "severity": "WARNING",
+      "java_total": "absent",
+      "guru_total": 12,
+      "triaged": false,
+      "added": "2026-08-14",
+      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru warns about booking rule ids the canonical validator does not flag on this flex feed. Not yet triaged."
+    },
+    {
+      "feed_id": "mdb-3234",
+      "code": "missing_prior_notice_duration_min",
+      "severity": "ERROR",
+      "java_total": 11,
+      "guru_total": 12,
+      "triaged": false,
+      "added": "2026-08-14",
+      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru reports one more occurrence than the canonical validator. Not yet triaged."
+    },
+    {
+      "feed_id": "tdg-81394",
+      "code": "foreign_key_violation",
+      "severity": "ERROR",
+      "java_total": 50631,
+      "guru_total": "absent",
+      "triaged": false,
+      "added": "2026-08-14",
+      "reason": "Pre-existing difference recorded when the real-world harness was introduced, and the largest one in the corpus. This feed populates pickup_booking_rule_id and drop_off_booking_rule_id but ships no booking_rules.txt; the canonical validator reports every reference as a foreign key violation and gtfs.guru reports none. Not yet triaged."
+    },
+    {
+      "feed_id": "tdg-81394",
+      "code": "geo_json_duplicated_element",
+      "severity": "ERROR",
+      "java_total": "absent",
+      "guru_total": 6,
+      "triaged": false,
+      "added": "2026-08-14",
+      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru reports duplicated GeoJSON elements the canonical validator does not. Not yet triaged."
+    },
+    {
+      "feed_id": "mdb-502",
+      "code": "service_never_active",
+      "severity": "WARNING",
+      "java_total": "absent",
+      "guru_total": 5,
+      "triaged": false,
+      "added": "2026-08-14",
+      "reason": "Pre-existing difference recorded when the real-world harness was introduced. Not yet triaged."
+    },
+    {
+      "feed_id": "tdg-83024",
+      "code": "duplicate_key",
+      "severity": "ERROR",
+      "java_total": "absent",
+      "guru_total": 2,
+      "triaged": false,
+      "added": "2026-08-14",
+      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru reports two duplicate keys the canonical validator does not. Not yet triaged."
+    }
+  ]
+}

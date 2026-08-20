@@ -37,6 +37,15 @@ See `docs/system-dependencies.md` for the package list.
   `summary.specRevision` / `summary.canonicalBaseline`. Never edit it by hand;
   regenerate it with `scripts/spec_watch.py update-baseline` and follow the
   protocol in `docs/spec-watch.md`.
+- Real-world parity: twelve pinned MobilityData datasets covering flexible
+  services, Fares v2 and pathways, checked against the committed baseline and
+  (before releases) against the canonical Java validator. The feed `.zip` files
+  are never committed.
+  ```
+  python3 scripts/real_world_corpus.py fetch
+  GTFS_VALIDATOR_BIN=./target/release/gtfs-guru MODE=self scripts/ci_real_world.sh
+  ```
+  See `docs/real-world-parity.md`.
 
 ## Detailed Guides
 

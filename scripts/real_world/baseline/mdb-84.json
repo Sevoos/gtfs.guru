@@ -1,0 +1,45 @@
+{
+  "feed_id": "mdb-84",
+  "dataset_id": "mdb-84-202507290024",
+  "counts": {
+    "errors": 0,
+    "warnings": 28,
+    "infos": 3
+  },
+  "features": [
+    "Continuous Stops",
+    "Fares V1",
+    "Feed Information",
+    "Headsigns",
+    "Location Types",
+    "Route Colors",
+    "Shapes",
+    "Stops Wheelchair Accessibility"
+  ],
+  "notices": {
+    "stop_without_stop_time": {
+      "severity": "WARNING",
+      "total": 28
+    },
+    "unknown_column": {
+      "severity": "INFO",
+      "total": 2
+    },
+    "unknown_file": {
+      "severity": "INFO",
+      "total": 1
+    }
+  },
+  "perf": {
+    "wall_seconds": 0.096,
+    "peak_rss_mb": 31.1,
+    "threads": 1,
+    "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
+  },
+  "last_change": {
+    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
+    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "validator_version": "1.0.0",
+    "host_platform": "linux"
+  }
+}

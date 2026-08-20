@@ -38,12 +38,13 @@ markdown_extensions:
   - admonition
   - pymdownx.details
 
-# Repo-facing notes: release steps, per-crate agent briefs, the golden suite's
-# local instructions, and the spec watcher's maintenance protocol. They stay in
-# the repo and out of the site.
+# Repo-facing notes: release steps, per-crate agent briefs, the golden and
+# real-world suites' local instructions, and the spec watcher's maintenance
+# protocol. They stay in the repo and out of the site.
 exclude_docs: |
   MAINTENANCE.md
   golden.md
+  real-world-parity.md
   spec-watch.md
   agents/
 

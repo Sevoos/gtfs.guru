@@ -1,0 +1,249 @@
+{
+  "version": 1,
+  "description": "Pinned real-world GTFS corpus for ecosystem parity checks. Feeds are immutable MobilityData dataset snapshots, identified by dataset_id and verified by sha256. The .zip files themselves are never committed; see docs/real-world-parity.md.",
+  "catalog_csv": "https://files.mobilitydatabase.org/feeds_v2.csv",
+  "dataset_url_template": "https://files.mobilitydatabase.org/{feed_id}/{dataset_id}/{dataset_id}.zip",
+  "latest_url_template": "https://files.mobilitydatabase.org/{feed_id}/latest.zip",
+  "feeds": [
+    {
+      "feed_id": "mdb-3218",
+      "dataset_id": "mdb-3218-202606160137",
+      "provider": "Dallas Host Committee",
+      "country_code": "US",
+      "date": "2026-06-16",
+      "sha256": "b739d749405aa6d7a07e0217dcfa65f8c029baa6e0de5541d7f87b92434d0df0",
+      "zip_bytes": 11766,
+      "unpacked_bytes": 32027,
+      "size_class": "tiny",
+      "covers": [
+        "Booking Rules",
+        "Frequencies"
+      ],
+      "rationale": "Smallest feed in the corpus. Booking rules with booking_type=0 (real-time) plus frequencies, and a stray stop_times_old.txt that keeps unknown_file handling exercised at near-zero cost."
+    },
+    {
+      "feed_id": "mdb-2433",
+      "dataset_id": "mdb-2433-202605140142",
+      "provider": "Avon Transit",
+      "country_code": "US",
+      "date": "2026-05-14",
+      "sha256": "02469324dd4e2dfb51937efc7befffd2ac6e8cfd1f46bb9e28ba91a514bd34f1",
+      "zip_bytes": 30490,
+      "unpacked_bytes": 143102,
+      "size_class": "tiny",
+      "covers": [
+        "Fare Products",
+        "Fare Media"
+      ],
+      "rationale": "Minimal Fares v2: fare_media and fare_products with none of the optional companions, so the fares loader is exercised in its most degenerate valid shape."
+    },
+    {
+      "feed_id": "mdb-3234",
+      "dataset_id": "mdb-3234-202606301640",
+      "provider": "Verkehrsverbund Berlin-Brandenburg",
+      "country_code": "DE",
+      "date": "2026-06-30",
+      "sha256": "cedb6543a7b55ca6accd8606e2256cae7b003891460abf72b0c4fe5f8fbb78d2",
+      "zip_bytes": 38464,
+      "unpacked_bytes": 238717,
+      "size_class": "tiny",
+      "covers": [
+        "Booking Rules",
+        "Fixed-Stops Demand Responsive Transit"
+      ],
+      "rationale": "Fixed-stop demand responsive transit with booking_type=1 (same-day) over 3093 location_group_stops rows, plus header-only pathways.txt and levels.txt for the empty-optional-file case. Non-ASCII German text and the corpus's only ERROR-severity flex notice (missing_prior_notice_duration_min)."
+    },
+    {
+      "feed_id": "mdb-470",
+      "dataset_id": "mdb-470-202603050033",
+      "provider": "Maryland Transit Administration Metro",
+      "country_code": "US",
+      "date": "2026-03-05",
+      "sha256": "7d536b02798b35bcd36c64f6faacb11f042e1dee520237f9cb3f7d75ac4e881b",
+      "zip_bytes": 56280,
+      "unpacked_bytes": 362698,
+      "size_class": "small",
+      "covers": [
+        "Pathway Signs",
+        "In-station Traversal Time",
+        "Levels",
+        "Pathway Connections",
+        "Rider Categories",
+        "Fare Transfers",
+        "Route-Based Fares",
+        "Fare Products"
+      ],
+      "rationale": "One of only three feeds in the whole catalog carrying Pathway Signs, and it pairs them with in-station traversal times and levels at a size that costs milliseconds. Also ships the pre-final Fares v2 spelling fare_containers.txt."
+    },
+    {
+      "feed_id": "mdb-84",
+      "dataset_id": "mdb-84-202507290024",
+      "provider": "Nevada County Connects (Gold Country Stage)",
+      "country_code": "US",
+      "date": "2025-07-29",
+      "sha256": "35813c7a77d2a27331a9cadc01dba45f0c4c65a8f40fd13c194d66ad11bb3c8f",
+      "zip_bytes": 302412,
+      "unpacked_bytes": 1373555,
+      "size_class": "small",
+      "covers": [
+        "Continuous Stops",
+        "Fares V1"
+      ],
+      "rationale": "The corpus's only Continuous Stops feed, which is why it stays even though Fares V1 is out of scope. Its V1 fare tables double as the control that keeps the V1 and V2 fare code paths distinguishable."
+    },
+    {
+      "feed_id": "mdb-503",
+      "dataset_id": "mdb-503-202608120101",
+      "provider": "Southeastern Pennsylvania Transportation Authority (Regional Rail)",
+      "country_code": "US",
+      "date": "2026-08-12",
+      "sha256": "0fb27161359ce214af282b3b1bb46ab16aadc9f779dad541039e1b452508ad4c",
+      "zip_bytes": 643003,
+      "unpacked_bytes": 3547078,
+      "size_class": "medium",
+      "covers": [
+        "Zone-Based Fares",
+        "Time-Based Fares",
+        "Contactless EMV Support",
+        "Rider Categories",
+        "Fare Transfers",
+        "Fare Media",
+        "Fare Products"
+      ],
+      "rationale": "The only complete zone-based fares wiring in the corpus: areas.txt plus 322 stop_areas.txt rows, so the area-to-stop rules run against real references instead of dangling ids. Also the only fare_transfer_type=2 and a second independent Time-Based Fares and Contactless EMV instance."
+    },
+    {
+      "feed_id": "tld-716",
+      "dataset_id": "tld-716-202605010025",
+      "provider": "Metro de Lisboa",
+      "country_code": "PT",
+      "date": "2026-05-01",
+      "sha256": "79480fbe7cedb1c72bba2e2d62245107d7d979d6b1b50d6a7c0c5e8e94815956",
+      "zip_bytes": 498790,
+      "unpacked_bytes": 3605784,
+      "size_class": "medium",
+      "covers": [
+        "Zone-Based Fares",
+        "Contactless EMV Support",
+        "Fares V1",
+        "Fare Products",
+        "Fare Media",
+        "Fare Transfers",
+        "Transfers"
+      ],
+      "rationale": "Fares V1 and V2 side by side in one feed, fare_media_type=3 (cEMV), and from_area_id/to_area_id pointing at an areas.txt with no stop_areas.txt at all. That dangling-area shape is what mdb-503's clean wiring gets compared against."
+    },
+    {
+      "feed_id": "mdb-763",
+      "dataset_id": "mdb-763-202608070128",
+      "provider": "Societe de transport de Levis",
+      "country_code": "CA",
+      "date": "2026-08-07",
+      "sha256": "3df722315a31f84b51c249458a0b8bd05f3441edf8df73c14144d39a5d029af5",
+      "zip_bytes": 1773531,
+      "unpacked_bytes": 10039368,
+      "size_class": "medium",
+      "covers": [
+        "Time-Based Fares",
+        "Rider Categories",
+        "Fare Media",
+        "Fare Products",
+        "Fare Transfers",
+        "Transfers"
+      ],
+      "rationale": "Time-based fares driven by timeframes.txt and from_timeframe_group_id, four of the five fare_media_type values, and eight rider categories. Empty calendar.txt and frequencies.txt next to 1326 calendar_dates rows keep the calendar fallback path honest."
+    },
+    {
+      "feed_id": "tdg-81394",
+      "dataset_id": "tdg-81394-202608130137",
+      "provider": "Region des Pays de la Loire",
+      "country_code": "FR",
+      "date": "2026-08-13",
+      "sha256": "a61dce119740ae1df5decedafbdebf404f8d2cca8b53d4c48ef87262a1b7159f",
+      "zip_bytes": 2185581,
+      "unpacked_bytes": 17877583,
+      "size_class": "large",
+      "covers": [
+        "Zone-Based Demand Responsive Services",
+        "Predefined Routes with Deviation",
+        "Fixed-Stops Demand Responsive Transit",
+        "Route-Based Fares"
+      ],
+      "rationale": "The corpus's only zone-based demand responsive services and predefined-routes-with-deviation feed: a 9.7 MB locations.geojson with both Polygon and MultiPolygon geometry and 717 location groups. Doubles as the error-volume stress case at roughly 72k errors, most of them one code, which is exactly the shape that can hide a small regression inside a large total."
+    },
+    {
+      "feed_id": "mdb-205",
+      "dataset_id": "mdb-205-202608090105",
+      "provider": "Metro Transit",
+      "country_code": "US",
+      "date": "2026-08-09",
+      "sha256": "b791eec538a831b2e14784ccd5e9f09286a1da60813b37f1f1b2851d7a24105c",
+      "zip_bytes": 24360108,
+      "unpacked_bytes": 113896406,
+      "size_class": "xlarge",
+      "covers": [
+        "Pathway Details",
+        "Pathway Connections",
+        "Levels"
+      ],
+      "rationale": "Pathway details (stair_count, length) and levels inside a genuinely large feed: 1.6M stop_times and 574k shape points. Ships linked_datasets.txt and vehicles.txt, so unknown-file handling is exercised at scale rather than only on toy feeds."
+    },
+    {
+      "feed_id": "mdb-502",
+      "dataset_id": "mdb-502-202608120116",
+      "provider": "Southeastern Pennsylvania Transportation Authority",
+      "country_code": "US",
+      "date": "2026-08-12",
+      "sha256": "d9dfae6750923cf5f4e50b0fe7d8d757e2c4de45218815678efa54a2e37cbafd",
+      "zip_bytes": 20124576,
+      "unpacked_bytes": 120169620,
+      "size_class": "xlarge",
+      "covers": [
+        "Pathway Connections",
+        "Pathway Details",
+        "Pathway Signs",
+        "Levels",
+        "In-station Traversal Time",
+        "Route-Based Fares",
+        "Rider Categories",
+        "Fare Transfers",
+        "Fare Media",
+        "Fare Products"
+      ],
+      "rationale": "The pathway depth and scale case: 846 pathways spanning modes 1, 2, 4, 5, 6 and 7, and the corpus's only fare-gate (6) and exit-gate (7) rows. One of only two feeds in the catalog carrying all five pathway subfeatures at once, and it also ships fare_leg_join_rules.txt."
+    },
+    {
+      "feed_id": "tdg-83024",
+      "dataset_id": "tdg-83024-202608140131",
+      "provider": "Bordeaux Metropole",
+      "country_code": "FR",
+      "date": "2026-08-14",
+      "sha256": "c71ed5ae0c13cec5475eadc15e766de322013c6db7b9ed68dc171d6b62a9a171",
+      "zip_bytes": 26489773,
+      "unpacked_bytes": 240327581,
+      "size_class": "xlarge",
+      "covers": [
+        "Fare Products",
+        "Fare Media",
+        "Fare Transfers",
+        "Rider Categories",
+        "Route-Based Fares"
+      ],
+      "rationale": "The time and memory ceiling of the corpus: 2.6M stop_times, 501k shape points, roughly 1 GB peak RSS. It carries a full Fares v2 set with route-based fares, so the fares rules are measured at the largest input the corpus has rather than only on small feeds."
+    }
+  ],
+  "wanted": [
+    {
+      "need": "Translations, Attributions, Text-to-Speech, Cars Allowed, Stop Access",
+      "note": "Out of the requested scope (flexible services, fares, pathways) and therefore deliberately absent. Add a feed here if the scope widens."
+    },
+    {
+      "need": "booking_type=2 (prior-days booking)",
+      "note": "Both booking-rule feeds in the corpus use booking_type 0 and 1. Candidates carrying 4 of 5 flex subfeatures in one feed: mdb-2174, mdb-2037, mdb-2439."
+    },
+    {
+      "need": "max_slope on pathways",
+      "note": "Pathway Details is covered through stair_count, length and min_width; max_slope appears in no corpus feed."
+    }
+  ]
+}

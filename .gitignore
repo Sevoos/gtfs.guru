@@ -5,6 +5,8 @@
 # Local AI coding sessions may contain full worktrees and conversation data.
 .claude/
 /golden_actual/
+# Real-world parity run outputs; the pinned corpus .zip files live under
+# /benchmark-feeds/ (also ignored) and must never be committed.
 /real_world_actual/
 /scripts/golden_manifest.tsv
 /node_modules/

@@ -1,62 +1,102 @@
 {
-  "retrievedOn": "2026-07-25",
-  "catalog": "https://mobilitydatabase.org/ (MobilityData/mobility-database-catalogs)",
-  "feeds": [
+  "note": "Minimal offline fixtures carved out of real published feeds, for tests that need shapes hand-authored data cannot produce. They are trimmed to only the tables the test reads, so they are small enough to commit and `cargo test` needs no network. Parity against whole real feeds is a separate job, handled by the pinned corpus in scripts/real_world/corpus.json, which downloads rather than commits -- see docs/real-world-parity.md.",
+  "fixtures": [
     {
-      "name": "benton_bat",
-      "mdbSourceId": "126",
-      "provider": "Benton Area Transportation",
-      "countryCode": "US",
-      "sourceUrl": "https://oregon-gtfs.trilliumtransit.com/gtfs_data/benton-or-us/benton-or-us.zip",
-      "licenseUrl": "https://oregon-gtfs.trilliumtransit.com",
-      "features": "fares-v1|flex-v1",
-      "sizeBytes": 185443,
-      "sha256": "2b32ee84d14c035fea53141a3d75648ce3205f5596025d858c08f70d4551c44a"
-    },
-    {
-      "name": "berlin_vbb",
-      "mdbSourceId": "782",
-      "provider": "Verkehrsverbund Berlin-Brandenburg (VBB)",
-      "countryCode": "DE",
-      "sourceUrl": "http://vbb.de/vbbgtfs",
-      "licenseUrl": "http://vbb.de/vbbgtfs",
-      "features": "pathways",
-      "sizeBytes": 76690342,
-      "sha256": "2ce1a98f31ab4637487b6b38c9bd51c54de88341614654c43d58210246a73cb0"
-    },
-    {
-      "name": "boston_mbta",
-      "mdbSourceId": "437",
-      "provider": "Massachusetts Bay Transportation Authority (MBTA)",
-      "countryCode": "US",
-      "sourceUrl": "https://cdn.mbta.com/MBTA_GTFS.zip",
-      "licenseUrl": "https://www.mass.gov/files/documents/2017/10/27/develop_license_agree_0.pdf",
-      "features": "pathways",
-      "sizeBytes": 18108889,
-      "sha256": "91deb20e0548859b416ffb36ce5b499a7b2844c01300c1de76a3ef61670f1196"
-    },
-    {
-      "name": "prague_pid",
-      "mdbSourceId": "767",
-      "provider": "Prazska integrovana doprava (PID)",
-      "countryCode": "CZ",
-      "sourceUrl": "http://data.pid.cz/PID_GTFS.zip",
-      "licenseUrl": "https://pid.cz/o-systemu/opendata/",
-      "features": "fares-v1|pathways",
-      "sizeBytes": 45824995,
-      "sha256": "57d30f4e9ff26795d1811448df05693f09ef90766f9ba3d2f9bdbdc2e8a1358a"
-    },
-    {
-      "name": "santacruz_scmtd",
-      "mdbSourceId": "2425",
-      "provider": "Santa Cruz Metro (SCMTD)",
-      "countryCode": "US",
-      "sourceUrl": "https://developer.scmetro.org/gtfs.zip",
-      "licenseUrl": "https://developer.scmetro.org/",
-      "features": "fares-v1|fares-v2",
-      "sizeBytes": 2620478,
-      "sha256": "58ac9b44d59b763db332c6311a8af3382f99d40c02dcdd51b6a294276119e5a8"
+      "name": "boston_mbta_pathways",
+      "file": "boston_mbta_pathways.zip",
+      "usedBy": "crates/gtfs_validator_core/tests/integration_tests.rs::test_mbta_pathways_are_fully_loaded_and_reachable",
+      "why": "9293 pathway rows spanning modes 1, 2, 4, 5, 6 and 7 -- the largest pathway graph available to the test suite, and the only one carrying fare gates and exit gates. 441 rows use a negative stair_count, which is the defect the test guards: a narrower integer type rejects those rows one by one. The test reads only pathways.txt and stops.txt, so the rest of the 17 MiB source feed is not here.",
+      "sizeBytes": 450169,
+      "sha256": "c56bad6af8346d10bedea13c2971fdca21643f5bed257433d477b0a576af7af8",
+      "members": {
+        "pathways.txt": {
+          "bytes": 1689402,
+          "records": 9293,
+          "sha256": "b020d7255f35deb65c947a8227f17d31b33b9ed942e0c49f7397c6fc73c17e02"
+        },
+        "stops.txt": {
+          "bytes": 1573258,
+          "records": 10293,
+          "sha256": "e9db55dccdf172f06ac9649a50a08cb057966ff1786a917131df79b7148d8c4f"
+        }
+      },
+      "derivedFrom": {
+        "name": "boston_mbta",
+        "mdbSourceId": "437",
+        "provider": "Massachusetts Bay Transportation Authority (MBTA)",
+        "countryCode": "US",
+        "sourceUrl": "https://cdn.mbta.com/MBTA_GTFS.zip",
+        "licenseUrl": "https://www.mass.gov/files/documents/2017/10/27/develop_license_agree_0.pdf",
+        "retrievedOn": "2026-07-25",
+        "sizeBytes": 18108889,
+        "sha256": "91deb20e0548859b416ffb36ce5b499a7b2844c01300c1de76a3ef61670f1196",
+        "recoverFrom": "git show 96ace33:test-gtfs-feeds/real-world/boston_mbta.zip",
+        "note": "sourceUrl serves whatever MBTA publishes today and will not reproduce this snapshot. The snapshot itself stays in git history at 96ace33."
+      },
+      "rebuild": "Extract the members listed above and repack them deterministically -- fixed member order, date_time (1980,1,1,0,0,0), ZIP_DEFLATED level 9, external_attr 0o644 << 16. The per-member hashes are the check that matters; byte-identity of the archive additionally depends on the zlib build.",
+      "verify": "python3 -c \"import hashlib,zipfile;z=zipfile.ZipFile('test-gtfs-feeds/real-world/boston_mbta_pathways.zip');[print(n, hashlib.sha256(z.read(n)).hexdigest()) for n in sorted(z.namelist())]\""
     }
   ],
-  "note": "Links to the real-world feeds used for parity checks against the canonical validator. The feeds themselves are not committed: they weigh ~143 MB and their publishers refresh them continuously. Run scripts/fetch_real_world_feeds.py to download them into this directory, which .gitignore keeps untracked. Only feeds whose catalog entry states a license are listed here. `sizeBytes` and `sha256` identify the snapshot retrieved on `retrievedOn` -- they record which bytes a parity number was taken against, and a fresh download is expected to differ."
+  "retired": {
+    "note": "Five published feeds were previously committed here (~143 MiB, about 92% of the repository's history weight), then fetched at runtime by scripts/fetch_real_world_feeds.py. Both arrangements are gone: the fixture above covers the one test that read any of them, and the pinned corpus covers parity against whole feeds with stronger guarantees -- immutable snapshots whose hash must match, rather than publisher URLs whose contents are expected to drift. Every feed below is still an active MobilityData source and can be pinned into scripts/real_world/corpus.json if it is ever wanted, and each snapshot remains recoverable from git history at 96ace33.",
+    "removedOn": "2026-08-19",
+    "feeds": [
+      {
+        "name": "berlin_vbb",
+        "mdbSourceId": "782",
+        "provider": "Verkehrsverbund Berlin-Brandenburg (VBB)",
+        "countryCode": "DE",
+        "sourceUrl": "http://vbb.de/vbbgtfs",
+        "licenseUrl": "http://vbb.de/vbbgtfs",
+        "features": "pathways",
+        "sizeBytes": 76690342,
+        "sha256": "2ce1a98f31ab4637487b6b38c9bd51c54de88341614654c43d58210246a73cb0"
+      },
+      {
+        "name": "prague_pid",
+        "mdbSourceId": "767",
+        "provider": "Prazska integrovana doprava (PID)",
+        "countryCode": "CZ",
+        "sourceUrl": "http://data.pid.cz/PID_GTFS.zip",
+        "licenseUrl": "https://pid.cz/o-systemu/opendata/",
+        "features": "fares-v1|pathways",
+        "sizeBytes": 45824995,
+        "sha256": "57d30f4e9ff26795d1811448df05693f09ef90766f9ba3d2f9bdbdc2e8a1358a"
+      },
+      {
+        "name": "santacruz_scmtd",
+        "mdbSourceId": "2425",
+        "provider": "Santa Cruz Metro (SCMTD)",
+        "countryCode": "US",
+        "sourceUrl": "https://developer.scmetro.org/gtfs.zip",
+        "licenseUrl": "https://developer.scmetro.org/",
+        "features": "fares-v1|fares-v2",
+        "sizeBytes": 2620478,
+        "sha256": "58ac9b44d59b763db332c6311a8af3382f99d40c02dcdd51b6a294276119e5a8"
+      },
+      {
+        "name": "benton_bat",
+        "mdbSourceId": "126",
+        "provider": "Benton Area Transportation",
+        "countryCode": "US",
+        "sourceUrl": "https://oregon-gtfs.trilliumtransit.com/gtfs_data/benton-or-us/benton-or-us.zip",
+        "licenseUrl": "https://oregon-gtfs.trilliumtransit.com",
+        "features": "fares-v1|flex-v1",
+        "sizeBytes": 185443,
+        "sha256": "2b32ee84d14c035fea53141a3d75648ce3205f5596025d858c08f70d4551c44a"
+      },
+      {
+        "name": "boston_mbta",
+        "mdbSourceId": "437",
+        "provider": "Massachusetts Bay Transportation Authority (MBTA)",
+        "countryCode": "US",
+        "sourceUrl": "https://cdn.mbta.com/MBTA_GTFS.zip",
+        "licenseUrl": "https://www.mass.gov/files/documents/2017/10/27/develop_license_agree_0.pdf",
+        "features": "pathways",
+        "sizeBytes": 18108889,
+        "sha256": "91deb20e0548859b416ffb36ce5b499a7b2844c01300c1de76a3ef61670f1196",
+        "supersededBy": "boston_mbta_pathways.zip"
+      }
+    ]
+  }
 }

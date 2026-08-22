@@ -68,6 +68,13 @@ env:
 
 jobs:
   parity:
+    # A weekly full-parity run in a fork would spend twenty minutes and a 40 MB
+    # jar download to produce a report nobody reads, so the schedule is limited
+    # to the upstream repository, as in spec-watch.yml. Every other trigger --
+    # pull request, push, dispatch, release -- runs wherever it fires.
+    if: >-
+      github.event_name != 'schedule'
+      || github.repository == 'abasis-ltd/gtfs.guru'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

@@ -8,10 +8,11 @@ Closely compatible with [MobilityData gtfs-validator](https://github.com/Mobilit
 
 | Feature | Java Validator | GTFS.Guru |
 |---------|---------------|-----------|
-| **Speed** | 1x | 4.6–6.7x faster on published benchmarks |
+| **Speed** | 1x | [4.6–6.7x faster](benchmarks.md) |
 | **Startup** | JVM warm-up | Native binary, no runtime |
 | **Python bindings** | ❌ | ✅ |
 | **WebAssembly** | ❌ | ✅ |
+| **MCP server** | ❌ | ✅ |
 | **Parsing Strategy** | Serial | Parallel (Rayon) |
 | **Desktop app** | ❌ | ✅ |
 
@@ -33,13 +34,11 @@ print(f"Valid: {result.is_valid}, Errors: {result.error_count}")
 ### Command Line
 
 ```bash
-# Build
-cargo build --release -p gtfs-guru
+curl -fsSL https://raw.githubusercontent.com/abasis-ltd/gtfs.guru/main/scripts/install.sh | bash
+```
 
-# Run
-./target/release/gtfs-guru \
-    --input /path/to/gtfs.zip \
-    --output_base /tmp/report
+```bash
+gtfs-guru --input /path/to/gtfs.zip --output_base /tmp/report
 ```
 
 ### Web API
@@ -52,7 +51,7 @@ cargo run --release -p gtfs-guru-web
 ## Features
 
 - **110 validation rules** — broad coverage including Fares v2, Flex and Pathways
-- **Multiple interfaces** — CLI, Web API, Python bindings, Desktop App, WebAssembly
+- **Multiple interfaces** — CLI, Web API, Python bindings, Desktop App, WebAssembly, MCP
 - **Cross-platform** — macOS, Linux, Windows
 - **Detailed reports** — JSON, HTML and SARIF output with geographic context
 - **Auto-fix** — `--fix-dry-run` lists suggested edits, `--fix` writes a repaired copy of the feed
@@ -61,6 +60,8 @@ cargo run --release -p gtfs-guru-web
 ## Next Steps
 
 - [Installation](installation.md) — Install via pip, cargo, or download binaries
-- [CLI Usage](usage.md) — Command-line options and examples
+- [CLI Usage](usage.md) — Command-line options, subcommands, and CI recipes
+- [Benchmarks](benchmarks.md) — How the speed numbers were measured
+- [LLM Guide](llm.md) — Copy/paste reference and the MCP server
 - [Python API](python_api.md) — Python bindings documentation
 - [Validation Rules](rules.md) — Notice codes emitted by the 110 validators

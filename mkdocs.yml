@@ -52,6 +52,7 @@ nav:
   - Installation: installation.md
   - System Dependencies: system-dependencies.md
   - Usage: usage.md
+  - Benchmarks: benchmarks.md
   - LLM Guide: llm.md
   - Python API: python_api.md
   - Validation Rules: rules.md

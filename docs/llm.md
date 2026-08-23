@@ -86,11 +86,15 @@ absolute path to the binary.
 Tools:
 
 - `list_gtfs_feeds`: discover ZIP archives and unzipped feeds under the
-  configured `--allow-dir` roots. Optional `nameContains` filters by name,
-  case-insensitively.
+  configured `--allow-dir` roots, each with the absolute path the other tools
+  take — so an assistant asked about a feed by name never has to search the
+  filesystem. Optional `nameContains` filters by name, case-insensitively.
 - `validate_gtfs`
 - `explain_gtfs`
 - `get_notice_details`
+
+File access is confined to the `--allow-dir` roots, and the server never
+writes to a feed.
 
 Validation and explanation responses include exact grouped totals plus up to
 three concrete examples per code/severity group, including available file,
@@ -117,6 +121,13 @@ Connect to `http://127.0.0.1:3000/mcp` and send
 deployment, terminate TLS at a reverse proxy and add its public hostname with
 `--allowed-host`. Use `--allowed-origin` when browser clients have a known
 origin. `/healthz` does not require authentication.
+
+The HTTP transport defaults to 60 authenticated requests per rolling minute,
+four concurrent validations, and 64 KiB request bodies.
+
+After an in-browser validation, [gtfs.guru](https://gtfs.guru) also renders a
+local "What ChatGPT receives" preview built from the same report. It shows the
+MCP payload shape without uploading the feed or calling an AI provider.
 
 Common flags:
 

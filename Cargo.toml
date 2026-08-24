@@ -38,6 +38,23 @@ tower = "0.4"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
+# Dev builds keep line tables for the workspace's own crates -- enough for
+# file:line in panics and backtraces -- and carry no debug info for anything
+# else. DWARF is over 99% of a full debug artifact here, and nobody steps into
+# webkit2gtk or tokio, so the rest is disk and link time for no one's benefit.
+# The all-features debug tree otherwise approaches the CI runner's free space.
+[profile.dev]
+debug = "line-tables-only"
+
+# Dependencies: no debug info at all. `test` inherits `dev`, so this covers
+# `cargo test` too.
+[profile.dev.package."*"]
+debug = 0
+
+# Build scripts and proc macros are never debugged interactively either.
+[profile.dev.build-override]
+debug = 0
+
 # Release profile tuned for CLI speed; use release-wasm for size.
 # Shipped binaries carry no debug info: on Linux the DWARF is embedded in the
 # ELF, which inflates every published tarball for no user benefit.

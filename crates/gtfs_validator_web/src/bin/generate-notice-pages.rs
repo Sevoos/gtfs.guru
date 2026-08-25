@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use anyhow::{bail, Context};
 use gtfs_guru_core::build_notice_schema_map;
@@ -732,8 +733,9 @@ fn render_index(schemas: &BTreeMap<String, NoticeSchema>) -> String {
 }
 
 fn render_sitemap(root: &Path, schemas: &BTreeMap<String, NoticeSchema>) -> anyhow::Result<String> {
-    let mut urls = BTreeSet::new();
-    urls.insert(format!("{BASE_URL}/"));
+    // (url, file backing it) so every entry can carry its own <lastmod>.
+    let mut urls: BTreeMap<String, PathBuf> = BTreeMap::new();
+    urls.insert(format!("{BASE_URL}/"), root.join("index.html"));
     for entry in fs::read_dir(root).with_context(|| format!("read {}", root.display()))? {
         let path = entry?.path();
         if path.extension().and_then(|value| value.to_str()) != Some("html") {
@@ -742,23 +744,106 @@ fn render_sitemap(root: &Path, schemas: &BTreeMap<String, NoticeSchema>) -> anyh
         let name = path
             .file_name()
             .and_then(|value| value.to_str())
-            .unwrap_or("");
+            .unwrap_or("")
+            .to_string();
         if name != "index.html" {
-            urls.insert(format!("{BASE_URL}/{name}"));
+            urls.insert(format!("{BASE_URL}/{name}"), path);
         }
     }
-    urls.insert(format!("{BASE_URL}/notices/"));
+    urls.insert(
+        format!("{BASE_URL}/notices/"),
+        root.join("notices/index.html"),
+    );
     for code in schemas.keys() {
-        urls.insert(format!("{BASE_URL}/notices/{code}/"));
+        urls.insert(
+            format!("{BASE_URL}/notices/{code}/"),
+            root.join("notices").join(code).join("index.html"),
+        );
     }
 
     let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     xml.push_str("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
-    for url in urls {
-        writeln!(xml, "  <url><loc>{}</loc></url>", escape_xml(&url)).expect("write to string");
+    for (url, path) in urls {
+        match last_modified(&path) {
+            Some(date) => writeln!(
+                xml,
+                "  <url><loc>{}</loc><lastmod>{}</lastmod></url>",
+                escape_xml(&url),
+                date
+            ),
+            None => writeln!(xml, "  <url><loc>{}</loc></url>", escape_xml(&url)),
+        }
+        .expect("write to string");
     }
     xml.push_str("</urlset>\n");
     Ok(xml)
+}
+
+/// Per-URL `lastmod`, as `YYYY-MM-DD`.
+///
+/// Git commit date first, file mtime second. Neither alone is right: a fresh CI
+/// clone stamps every file with the checkout time, which would tell crawlers the
+/// whole site changed at once and get recrawl frequency throttled, while git
+/// alone reports a stale date for a file edited but not yet committed. So the
+/// commit date is used only when the path is clean in the working tree.
+///
+/// The notice pages are safe to date this way because `check_or_write` leaves a
+/// file untouched when its rendered content is unchanged, so an unmodified page
+/// keeps both its old commit and its old mtime across regenerations.
+fn last_modified(path: &Path) -> Option<String> {
+    if !path.exists() {
+        return None;
+    }
+    let dir = path.parent()?;
+
+    let dirty = Command::new("git")
+        .args(["status", "--porcelain", "--"])
+        .arg(path)
+        .current_dir(dir)
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| !out.stdout.is_empty());
+
+    if dirty == Some(false) {
+        let committed = Command::new("git")
+            .args(["log", "-1", "--format=%cs", "--"])
+            .arg(path)
+            .current_dir(dir)
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+            .filter(|date| date.len() == 10);
+        if let Some(date) = committed {
+            return Some(date);
+        }
+    }
+
+    let modified = fs::metadata(path).ok()?.modified().ok()?;
+    let secs = modified
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    Some(civil_date(secs))
+}
+
+/// Days-since-epoch to `YYYY-MM-DD`, so the generator does not need a date
+/// crate for the one place it formats a date.
+fn civil_date(unix_secs: u64) -> String {
+    // Howard Hinnant's civil_from_days, shifted to a March-based year.
+    let days = (unix_secs / 86_400) as i64;
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 fn build_related_notices(

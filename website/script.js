@@ -632,70 +632,11 @@ async function validateFeed(arrayBuffer, dateStr) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // The .js class is set synchronously in <head>; the scroll-reveal styles
-    // are scoped to it, so markup stays visible if this script never runs.
-    const prefersReducedMotion =
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    const revealEl = (el) => {
-        el.classList.add('visible');
-        if (el.querySelector('.stat-number')) startCounters(el);
-    };
-
-    /* --- Intersection Observer for Fade-Up Animations --- */
-    const observerOptions = {
-        threshold: 0.1,
-        rootMargin: "0px 0px -50px 0px"
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                revealEl(entry.target);
-                observer.unobserve(entry.target);
-            }
-        });
-    }, observerOptions);
-
-    const fadeEls = document.querySelectorAll('.fade-up');
-    fadeEls.forEach(el => observer.observe(el));
-
-    // Failsafe: never let content stay invisible. If the observer hasn't
-    // revealed an element (deep link landing exactly on a section edge, an
-    // early script error, an unsupported environment), show it anyway.
-    setTimeout(() => {
-        fadeEls.forEach(el => {
-            if (!el.classList.contains('visible')) revealEl(el);
-        });
-    }, 1500);
-
-    /* --- Number Counters --- */
-    // Time-based rather than fixed-increment-per-frame: a throttled or
-    // background tab drops frames instead of stalling the count partway
-    // (the old version could sit on "17x" indefinitely).
-    function startCounters(container) {
-        container.querySelectorAll('.stat-number').forEach(counter => {
-            if (counter.dataset.counted) return;
-            counter.dataset.counted = '1';
-
-            const target = +counter.getAttribute('data-target');
-            if (prefersReducedMotion || !target) {
-                counter.textContent = String(target);
-                return;
-            }
-
-            const duration = 1200; // ms
-            const startedAt = performance.now();
-            const step = (now) => {
-                const p = Math.min(1, (now - startedAt) / duration);
-                const eased = 1 - Math.pow(1 - p, 3);
-                counter.textContent = String(Math.round(target * eased));
-                if (p < 1) requestAnimationFrame(step);
-                else counter.textContent = String(target);
-            };
-            requestAnimationFrame(step);
-        });
-    }
+    /* Scroll-reveal and the stat counters are both gone. The reveal hid every
+       section behind an observer for no reading benefit, and the counters
+       animated three numbers that are stronger stated flatly ("0 kb uploaded"
+       means nothing while it is counting up from zero). The markup carries the
+       final values, so nothing has to run for them to be correct. */
 
     /* --- Mobile nav toggle --- */
     const navToggle = document.getElementById('nav-toggle');

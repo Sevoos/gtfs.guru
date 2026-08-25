@@ -31,14 +31,16 @@
   {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    "mainEntity": [{
-      "@type": "Question",
-      "name": "How do I validate my GTFS feed?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Use a GTFS validator like GTFS Guru. Simply upload or drag-and-drop your GTFS ZIP file. The validator checks for missing fields, broken references, invalid data, and other errors. Fix all errors before submitting to Google Maps."
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How do I validate my GTFS feed?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The easiest way is to drop your GTFS ZIP file into a tool like GTFS Guru. It'll scan your data and show you exactly what needs fixing."
+        }
       }
-    }]
+    ]
   }
   </script>
 
@@ -64,15 +66,85 @@
     "@type": "WebPage",
     "@id": "https://gtfs.guru/how-to-validate-gtfs.html"
   },
-  "dateModified": "2026-02-04"
+  "datePublished": "2026-02-04",
+  "dateModified": "2026-08-23"
 }
+    </script>
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "GTFS Guru",
+          "item": "https://gtfs.guru/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Guides",
+          "item": "https://gtfs.guru/faq.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "How Do I Validate My GTFS Feed?",
+          "item": "https://gtfs.guru/how-to-validate-gtfs.html"
+        }
+      ]
+    }
+    </script>
+
+    <script type="application/ld+json">
+{
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "How to validate a GTFS feed",
+      "tool": [
+        {
+          "@type": "HowToTool",
+          "name": "A GTFS feed packaged as a .zip file"
+        }
+      ],
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Open the validator",
+          "text": "Go to gtfs.guru",
+          "url": "https://gtfs.guru/#validator"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Load the feed",
+          "text": "Drag and drop your GTFS ZIP file onto the validator (or click to browse)"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Wait for the scan",
+          "text": "Wait a few seconds for validation to complete"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Review and fix",
+          "text": "Review the results – fix any errors, address warnings"
+        }
+      ],
+      "totalTime": "PT2M"
+    }
     </script>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;700;800&display=swap"
+        crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
 
     <!-- Custom CSS -->
@@ -84,9 +156,6 @@
 </head>
 
 <body>
-    <div class="bg-gradient-orb orb-1"></div>
-    <div class="grid-overlay"></div>
-
     <nav class="glass-nav">
         <div class="container nav-container">
             <a href="index.html" class="logo">
@@ -97,6 +166,7 @@
                 <a href="index.html#validator">Web Validator</a>
                 <a href="index.html#faq">FAQ</a>
                 <a href="faq.html" class="active">Guides</a>
+                <a href="notices/">Notice codes</a>
                 <a href="contact.html">Contact</a>
                 <a href="index.html#developers">Developers</a>
                 <a href="https://github.com/abasis-ltd/gtfs.guru" target="_blank">GitHub</a>
@@ -106,7 +176,7 @@
     </nav>
 
     <article class="faq-article">
-        <a href="faq.html" class="faq-back-link"><i data-lucide="arrow-left"></i> Back to Guides</a>
+        <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span aria-hidden="true">/</span><a href="faq.html">Guides</a><span aria-hidden="true">/</span><span aria-current="page">How Do I Validate My GTFS Feed?</span></nav>
 
         <h1>How Do I Validate My GTFS Feed?</h1>
 
@@ -168,8 +238,9 @@
 
         <p><strong>GTFS Guru Python:</strong> Integrate into Python code with <code>pip install gtfs-guru</code></p>
 
-        <p><strong>Canonical Validator:</strong> The official Java validator from MobilityData (slower, requires Java).
-        </p>
+        <p><strong>Canonical Validator:</strong> The
+            <a href="https://github.com/MobilityData/gtfs-validator" target="_blank" rel="noopener">official Java
+            validator</a> from MobilityData. Same rules and notice codes; slower, and needs a Java runtime.</p>
 
         <p><strong>Google Transit Dashboard:</strong> Google validates when you submit, but it's better to catch errors
             beforehand.</p>
@@ -195,13 +266,14 @@
     <footer>
         <div class="container footer-container">
             <div class="footer-brand">
-                <img class="footer-logo" src="favicon.svg?v=2" alt="" aria-hidden="true">
-                <span class="logo-text">GTFS.Guru</span>
+                <img class="footer-logo" src="logo.png" alt="" aria-hidden="true" width="512" height="512">
+                <span class="logo-text">GTFS Guru</span>
                 <p>by Abasis.AI</p>
             </div>
             <div class="footer-links">
                 <a href="index.html#faq">FAQ</a>
                 <a href="faq.html">Guides</a>
+                <a href="notices/">Notice codes</a>
                 <a href="contact.html">Contact</a>
                 <a href="privacy.html">Privacy</a>
                 <a href="terms.html">Terms</a>

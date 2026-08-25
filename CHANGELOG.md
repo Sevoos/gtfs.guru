@@ -40,6 +40,14 @@ and this project follows [Semantic Versioning](https://semver.org/).
   `canonicalBaseline`, so a stored report states which specification revision and
   canonical validator release it was produced against.
 
+### Fixed
+
+- The demo feed archive is stored rather than deflated, so
+  `scripts/build_demo_feed.py --check` agrees with the committed copy on every
+  machine. Deflate output is only stable for a given zlib implementation, so a
+  contributor whose Python links zlib-ng saw the committed archive as stale and a
+  rebuild produced a diff CI rejected. The archive's contents are unchanged.
+
 ## [1.0.0] - 2026-07-28
 
 First stable release. The CLI, core, model, report, profile, MCP, web, WASM,

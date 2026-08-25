@@ -35,6 +35,7 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE = ROOT / "crates" / "gtfs_validator_core" / "spec_baseline.json"
+DEFAULT_CHANGES = ROOT / "crates" / "gtfs_validator_core" / "spec_changes.json"
 DEFAULT_REPORT_DIR = ROOT / "target" / "spec-watch"
 
 GITHUB_API = "https://api.github.com"
@@ -943,6 +944,116 @@ def run_update_baseline(args: argparse.Namespace) -> int:
     return 0
 
 
+
+# ---------------------------------------------------------------------------
+# Coordination
+
+
+def git_location(path: pathlib.Path) -> tuple[pathlib.Path, pathlib.PurePosixPath]:
+    """The repository root holding `path`, and `path` relative to it.
+
+    Derived from the file rather than from this script's own location, so the
+    check works on any checkout -- including the throwaway repositories the
+    offline tests build.
+    """
+    resolved = path.resolve()
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(resolved.parent), "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+        )
+    except FileNotFoundError as error:  # pragma: no cover - git is present in CI
+        raise WatchError(f"git is required to compare revisions: {error}") from error
+    except subprocess.CalledProcessError as error:
+        detail = error.stderr.decode("utf-8", "replace").strip()
+        raise WatchError(f"{path} is not inside a git repository: {detail}") from error
+    toplevel = pathlib.Path(completed.stdout.decode("utf-8").strip()).resolve()
+    return toplevel, pathlib.PurePosixPath(resolved.relative_to(toplevel).as_posix())
+
+
+def git_show(ref: str, path: pathlib.Path) -> str | None:
+    """The file's content at `ref`, or `None` when it did not exist there."""
+    toplevel, relative = git_location(path)
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(toplevel), "show", f"{ref}:{relative}"],
+            check=True,
+            capture_output=True,
+        )
+    except FileNotFoundError as error:  # pragma: no cover - git is present in CI
+        raise WatchError(f"git is required to compare against {ref}: {error}") from error
+    except subprocess.CalledProcessError:
+        return None
+    return completed.stdout.decode("utf-8")
+
+
+def baseline_identity(document: dict) -> tuple[str, str]:
+    """The pair that decides whether the baseline moved."""
+    return (
+        str(document.get("specRevision", {}).get("commit", "")),
+        str(document.get("canonicalBaseline", {}).get("version", "")),
+    )
+
+
+def run_check_coordination(args: argparse.Namespace) -> int:
+    """Fail when the baseline moved without the published change log moving.
+
+    Spec Watch answers "did upstream move?". This answers the question that
+    follows: "did we say so?". Moving the baseline is how a new upstream state
+    becomes the one we answer for, and the compatibility page is where that is
+    stated publicly; a baseline that moves alone leaves the page describing a
+    state this build no longer aligns with.
+    """
+    current_baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
+    previous_baseline_text = git_show(args.base_ref, args.baseline)
+    if previous_baseline_text is None:
+        print(
+            f"spec_watch: {args.baseline.name} does not exist at {args.base_ref}; "
+            "nothing to compare"
+        )
+        return 0
+
+    previous_identity = baseline_identity(json.loads(previous_baseline_text))
+    current_identity = baseline_identity(current_baseline)
+    if previous_identity == current_identity:
+        print(f"baseline unchanged since {args.base_ref}; nothing to coordinate")
+        return 0
+
+    moved = []
+    if previous_identity[0] != current_identity[0]:
+        moved.append(
+            f"specification revision {short(previous_identity[0])} -> "
+            f"{short(current_identity[0])}"
+        )
+    if previous_identity[1] != current_identity[1]:
+        moved.append(f"canonical release {previous_identity[1]} -> {current_identity[1]}")
+
+    previous_changes_text = git_show(args.base_ref, args.changes)
+    current_changes_text = args.changes.read_text(encoding="utf-8")
+    if previous_changes_text == current_changes_text:
+        moved_description = "; ".join(moved)
+        _, relative_changes = git_location(args.changes)
+        print(
+            f"::error file={relative_changes}::"
+            f"the baseline moved ({moved_description}) but {args.changes.name} is unchanged"
+        )
+        print(
+            f"spec_watch: the baseline moved ({moved_description}) without any change to "
+            f"{args.changes.name}.\n"
+            "  Every baseline move is a new public claim about what this build supports.\n"
+            "  Add or update the entries for what upstream changed, then regenerate the\n"
+            "  compatibility page:\n"
+            "    cargo run -p gtfs-guru-web --bin generate-notice-pages\n"
+            "  See docs/spec-watch.md, 'Protocol: moving the baseline'.",
+            file=sys.stderr,
+        )
+        return 3
+
+    print(f"baseline moved ({'; '.join(moved)}) and {args.changes.name} moved with it")
+    return 0
+
+
 def add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--baseline",
@@ -1017,6 +1128,29 @@ def build_parser() -> argparse.ArgumentParser:
     add_shared_arguments(update)
     update.add_argument("--updated-at", help="timestamp to record; defaults to now, in UTC")
     update.set_defaults(func=run_update_baseline)
+
+    coordination = subparsers.add_parser(
+        "check-coordination",
+        help="fail when the baseline moved without the published change log moving",
+    )
+    coordination.add_argument(
+        "--baseline",
+        type=pathlib.Path,
+        default=DEFAULT_BASELINE,
+        help="baseline document (default: %(default)s)",
+    )
+    coordination.add_argument(
+        "--changes",
+        type=pathlib.Path,
+        default=DEFAULT_CHANGES,
+        help="curated change log the compatibility page is built from (default: %(default)s)",
+    )
+    coordination.add_argument(
+        "--base-ref",
+        default="origin/main",
+        help="git ref to compare against (default: %(default)s)",
+    )
+    coordination.set_defaults(func=run_check_coordination)
 
     return parser
 

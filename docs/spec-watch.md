@@ -16,10 +16,12 @@ new field, enum value, or rule *before* our support stops being current.
 | Piece | What it is |
 | --- | --- |
 | `crates/gtfs_validator_core/spec_baseline.json` | The upstream state this build is aligned with, plus the differences we have consciously accepted. Single source of truth. |
+| `crates/gtfs_validator_core/spec_changes.json` | The curated record of what upstream changed recently and what we do about it. Generates the public compatibility page; every claim in it is checked against the surface by `cargo test`. |
 | `gtfs-guru spec-surface` | What this build actually supports — files, fields, required fields, enum domains, notice codes — read out of the same tables validation uses. |
 | `scripts/spec_watch.py` | The detector: fetches upstream, compares it to the surface, subtracts the baseline, reports what is left. |
 | `scripts/spec_watch_test.py` | Offline tests that inject a field, an enum value, and a rule into committed fixtures and assert each is detected. |
-| `.github/workflows/spec-watch.yml` | Weekly run (Mondays, 06:17 UTC), plus `workflow_dispatch`, plus the detector tests on every relevant pull request. |
+| `.github/workflows/spec-watch.yml` | Weekly run (Mondays, 06:17 UTC), plus `workflow_dispatch`, plus the detector tests and the coordination check on every relevant pull request. |
+| `website/compatibility/index.html` | The public page. Generated and committed by `cargo run -p gtfs-guru-web --bin generate-notice-pages`, from `spec_baseline.json`, `spec_changes.json`, and the spec surface. |
 
 Reports carry the baseline too: every JSON report's `summary` has
 `specRevision` and `canonicalBaseline`, so a stored report says which upstream
@@ -191,11 +193,30 @@ It is a deliberate act, always reviewed, never automatic.
 
    This rewrites `spec_baseline.json`: the new spec commit, the new canonical
    release, and the differences that remain as `acknowledged`.
-4. **Review the `acknowledged` diff line by line.** Every entry there is a
+4. **Explain every change on the public page.** Add or update the entries in
+   `spec_changes.json` for what the report listed -- a support status, the GTFS
+   Guru version that gained it, the upstream reference, and one sentence of
+   plain English -- then regenerate:
+
+   ```bash
+   cargo run -p gtfs-guru-web --bin generate-notice-pages
+   ```
+
+   Two checks keep this step honest rather than optional. Every accepted
+   difference in `spec_baseline.json` must have a matching entry, and every
+   support claim must match the build, or `cargo test -p gtfs-guru-core` fails.
+   And a pull request that moves the baseline without touching
+   `spec_changes.json` fails the coordination check:
+
+   ```bash
+   python3 scripts/spec_watch.py check-coordination --base-ref origin/main
+   ```
+
+5. **Review the `acknowledged` diff line by line.** Every entry there is a
    promise that the difference is intended. Entries that are not intended are
    bugs to fix in step 2, not lines to commit. Add a note to the pull request
    describing why each new entry is deliberate.
-5. **Rebuild and re-run the checks.** The baseline is compiled into the binary,
+6. **Rebuild and re-run the checks.** The baseline is compiled into the binary,
    so reports only quote the new revision after a rebuild:
 
    ```bash
@@ -206,7 +227,7 @@ It is a deliberate act, always reviewed, never automatic.
    ```
 
    The last command must print `no drift`.
-6. **Close the Linear issue** once the pull request lands. The next drift opens
+7. **Close the Linear issue** once the pull request lands. The next drift opens
    a fresh one.
 
 The current `acknowledged` set records, among others: `route_branding_url` and

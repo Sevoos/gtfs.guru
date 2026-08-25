@@ -10,6 +10,10 @@ machine-readable schema, including context fields for every code:
 gtfs-guru --export-notices-schema --output_base ./out
 ```
 
+Which specification revision and canonical validator release these codes are
+aligned with, which of them correspond to a canonical rule, and what changed
+upstream recently: see [the compatibility page](https://gtfs.guru/compatibility/).
+
 ## ERROR (111)
 
 - `bidirectional_exit_gate`

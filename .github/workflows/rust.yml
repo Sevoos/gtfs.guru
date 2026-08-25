@@ -49,6 +49,17 @@ jobs:
       - name: Run tests
         run: cargo test --all-features
 
+      # The notice pages, the compatibility page, the sitemap, and docs/rules.md
+      # are generated artifacts that are committed. Without this gate a notice or
+      # baseline change lands while the published pages still describe the old
+      # build, which is exactly the drift the compatibility page exists to deny.
+      #
+      # Needs the full history the checkout above fetches: the sitemap's
+      # <lastmod> comes from each file's commit date, and a shallow clone would
+      # fall back to the checkout mtime and fail this step on every run.
+      - name: Generated pages and rule documentation are current
+        run: cargo run -p gtfs-guru-web --bin generate-notice-pages -- --check
+
   wasm:
     name: WASM Build & Test
     runs-on: ubuntu-latest

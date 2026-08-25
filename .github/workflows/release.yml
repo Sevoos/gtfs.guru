@@ -389,10 +389,50 @@ jobs:
           echo "=== Release files ==="
           ls -la release/
 
+      # Which upstream state the release answers for belongs in the release
+      # notes, not only on the website: someone reading the notes is deciding
+      # whether to upgrade.
+      - name: Compose the release note header
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+
+          baseline = json.loads(
+              pathlib.Path("crates/gtfs_validator_core/spec_baseline.json").read_text()
+          )
+          spec = baseline["specRevision"]
+          canonical = baseline["canonicalBaseline"]
+          reference = (
+              f"https://github.com/{spec['repository']}/blob/{spec['commit']}"
+              "/gtfs/spec/en/reference.md"
+          )
+          release = (
+              f"https://github.com/{canonical['repository']}/releases/tag/{canonical['version']}"
+          )
+          body = f"""## Compatibility
+
+          | | Supported |
+          | --- | --- |
+          | GTFS specification revision | [`{spec['repository']}@{spec['commit'][:8]}`]({reference}) ({spec['committedAt'][:10]}) |
+          | Canonical validator baseline | [`{canonical['repository']}@{canonical['version']}`]({release}) ({canonical['publishedAt'][:10]}) |
+
+          Recently added fields, enum values and rules with their support status, and every
+          notice code mapped to its canonical rule:
+          <https://gtfs.guru/compatibility/>
+          """
+          pathlib.Path("release-notes-header.md").write_text(
+              "\n".join(line.lstrip() for line in body.splitlines()) + "\n"
+          )
+          print(pathlib.Path("release-notes-header.md").read_text())
+          PY
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: release/*
+          # The composed header first, then the commit-and-pull-request list
+          # GitHub generates, appended below it.
+          body_path: release-notes-header.md
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

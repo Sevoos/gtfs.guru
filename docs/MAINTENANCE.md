@@ -92,7 +92,7 @@ Notes:
 
 * The repo-root `website/` is the **single copy** of the site. nginx serves it directly, and `gtfs-guru-web` embeds it via `include_dir!("$CARGO_MANIFEST_DIR/../../website")`. That embed is why `gtfs-guru-web` is `publish = false`: `cargo package` cannot carry a directory from outside the crate root, and the crate is a deployed binary rather than a library anyone depends on.
 * The example feed behind the "Try an example feed" button is generated, not hand-edited. Change `scripts/build_demo_feed.py` and re-run it (`python3 scripts/build_demo_feed.py`); `--check` is what CI runs.
-* Notice documentation is generated from the Rust schema and `src/notice_guides.json`. Run `cargo run -p gtfs-guru-web --bin generate-notice-pages` after changing a notice or guide. Refresh the bundled MobilityData snapshot with `python3 scripts/update_notice_metadata.py`; normal builds never require network access.
+* Notice documentation is generated from the Rust schema and `src/notice_guides.json`. Run `cargo run -p gtfs-guru-web --bin generate-notice-pages` after changing a notice or guide. The same command writes `website/compatibility/`, `website/sitemap.xml` and `docs/rules.md`; CI runs it with `-- --check` and fails when the committed output is stale. Refresh the bundled MobilityData snapshot with `python3 scripts/update_notice_metadata.py`; normal builds never require network access.
 * `deploy/update.sh` rebuilds the Docker (axum) stack — that is **not** what serves the live domain.
 * Server-level config (headers, TLS, caching) lives in `Caddyfile` and `website/nginx.conf` — since we control the server, custom headers (e.g. COOP/COEP for multithreaded WASM) can be set there.
 

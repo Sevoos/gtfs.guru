@@ -64,3 +64,12 @@ User-agent: *
 Allow: /
 
 Sitemap: https://gtfs.guru/sitemap.xml
+
+# IndexNow: lets Bing, Yandex, Seznam and Naver be told about a change instead
+# of waiting to be crawled. Bing matters here beyond its own share -- it is the
+# index most AI answer engines other than Gemini read from. Google does not
+# participate. The key file below must stay reachable at the site root; it is
+# how the endpoint verifies the submission came from someone who controls the
+# domain. Do not rename or delete it.
+# Submit with:
+#   curl "https://api.indexnow.org/indexnow?url=<URL>&key=c7229b4d19c36ca503a8b0938ac358e2"

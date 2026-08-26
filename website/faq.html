@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guides & Tutorials | GTFS.Guru</title>
-    <meta name="description" content="Detailed guides and tutorials about GTFS and transit data validation.">
+    <title>Guides & Tutorials | GTFS Guru</title>
+    <meta name="description" content="Guides to creating, validating and publishing GTFS feeds: what the acronym means, how to build a feed, why Google rejects one, and where to find feeds to test with.">
     <link rel="canonical" href="https://gtfs.guru/faq.html">
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon.png?v=2">
@@ -14,14 +14,14 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="GTFS Guru">
     <meta property="og:title" content="Guides & Tutorials | GTFS Guru">
-    <meta property="og:description" content="Detailed guides and tutorials about GTFS and transit data validation.">
+    <meta property="og:description" content="Guides to creating, validating and publishing GTFS feeds: what the acronym means, how to build a feed, why Google rejects one, and where to find feeds to test with.">
     <meta property="og:image" content="https://gtfs.guru/og-image.png">
     <meta property="og:url" content="https://gtfs.guru/faq.html">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Guides & Tutorials | GTFS Guru">
-    <meta name="twitter:description" content="Detailed guides and tutorials about GTFS and transit data validation.">
+    <meta name="twitter:description" content="Guides to creating, validating and publishing GTFS feeds: what the acronym means, how to build a feed, why Google rejects one, and where to find feeds to test with.">
     <meta name="twitter:image" content="https://gtfs.guru/og-image.png">
 
         <script type="application/ld+json">
@@ -103,10 +103,30 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;700;800&display=swap"
+        crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
 
     <!-- Custom CSS -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "GTFS Guru",
+          "item": "https://gtfs.guru/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Guides",
+          "item": "https://gtfs.guru/faq.html"
+        }
+      ]
+    }
+    </script>
     <link rel="stylesheet" href="style.css">
 
     <!-- Icons -->
@@ -114,9 +134,6 @@
 </head>
 
 <body>
-    <div class="bg-gradient-orb orb-1"></div>
-    <div class="grid-overlay"></div>
-
     <nav class="glass-nav">
         <div class="container nav-container">
             <a href="index.html" class="logo">
@@ -127,6 +144,7 @@
                 <a href="index.html#validator">Web Validator</a>
                 <a href="index.html#faq">FAQ</a>
                 <a href="faq.html" class="active">Guides</a>
+                <a href="notices/">Notice codes</a>
                 <a href="contact.html">Contact</a>
                 <a href="index.html#developers">Developers</a>
                 <a href="https://github.com/abasis-ltd/gtfs.guru" target="_blank">GitHub</a>
@@ -201,18 +219,43 @@
                 </a>
             </div>
         </div>
+
+        <!-- The notice reference is the largest part of the site by page count
+             and had one inbound link in the whole thing. It belongs here, next
+             to the guides, not buried in one paragraph of one article. -->
+        <div class="notice-callout">
+            <div>
+                <h2>Every notice code, explained</h2>
+                <p>
+                    The validator reports 191 notice codes across 110 checks. Each one has its own
+                    page: what triggers it, which files and fields are involved, how to fix it, and
+                    the part of the specification it comes from.
+                </p>
+                <div class="notice-callout-links">
+                    <a href="notices/" class="btn btn-primary">Browse all notice codes</a>
+                    <span class="sub-text">
+                        Common ones:
+                        <a href="notices/missing_required_field/"><code>missing_required_field</code></a>,
+                        <a href="notices/foreign_key_violation/"><code>foreign_key_violation</code></a>,
+                        <a href="notices/duplicate_key/"><code>duplicate_key</code></a>,
+                        <a href="notices/expired_calendar/"><code>expired_calendar</code></a>
+                    </span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <footer>
         <div class="container footer-container">
             <div class="footer-brand">
-                <img class="footer-logo" src="favicon.svg?v=2" alt="" aria-hidden="true">
-                <span class="logo-text">GTFS.Guru</span>
+                <img class="footer-logo" src="logo.png" alt="" aria-hidden="true" width="512" height="512">
+                <span class="logo-text">GTFS Guru</span>
                 <p>by Abasis.AI</p>
             </div>
             <div class="footer-links">
                 <a href="index.html#faq">FAQ</a>
                 <a href="faq.html">Guides</a>
+                <a href="notices/">Notice codes</a>
                 <a href="contact.html">Contact</a>
                 <a href="privacy.html">Privacy</a>
                 <a href="terms.html">Terms</a>

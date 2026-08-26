@@ -31,14 +31,16 @@
   {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    "mainEntity": [{
-      "@type": "Question",
-      "name": "What does GTFS stand for?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "GTFS stands for General Transit Feed Specification. It is an open data format used by public transit agencies worldwide to share their routes, schedules, and stop locations with apps like Google Maps, Apple Maps, and transit planners."
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What does GTFS stand for?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "GTFS stands for General Transit Feed Specification."
+        }
       }
-    }]
+    ]
   }
   </script>
 
@@ -64,15 +66,43 @@
     "@type": "WebPage",
     "@id": "https://gtfs.guru/what-does-gtfs-stand-for.html"
   },
-  "dateModified": "2026-02-04"
+  "datePublished": "2026-02-04",
+  "dateModified": "2026-08-23"
 }
+    </script>
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "GTFS Guru",
+          "item": "https://gtfs.guru/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Guides",
+          "item": "https://gtfs.guru/faq.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "What Does GTFS Stand For?",
+          "item": "https://gtfs.guru/what-does-gtfs-stand-for.html"
+        }
+      ]
+    }
     </script>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;700;800&display=swap"
+        crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
 
     <!-- Custom CSS -->
@@ -84,9 +114,6 @@
 </head>
 
 <body>
-    <div class="bg-gradient-orb orb-1"></div>
-    <div class="grid-overlay"></div>
-
     <nav class="glass-nav">
         <div class="container nav-container">
             <a href="index.html" class="logo">
@@ -97,6 +124,7 @@
                 <a href="index.html#validator">Web Validator</a>
                 <a href="index.html#faq">FAQ</a>
                 <a href="faq.html" class="active">Guides</a>
+                <a href="notices/">Notice codes</a>
                 <a href="contact.html">Contact</a>
                 <a href="index.html#developers">Developers</a>
                 <a href="https://github.com/abasis-ltd/gtfs.guru" target="_blank">GitHub</a>
@@ -106,7 +134,7 @@
     </nav>
 
     <article class="faq-article">
-        <a href="faq.html" class="faq-back-link"><i data-lucide="arrow-left"></i> Back to Guides</a>
+        <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span aria-hidden="true">/</span><a href="faq.html">Guides</a><span aria-hidden="true">/</span><span aria-current="page">What Does GTFS Stand For?</span></nav>
 
         <h1>What Does GTFS Stand For?</h1>
 
@@ -148,9 +176,11 @@
 
         <h2>Who Maintains GTFS?</h2>
 
-        <p>GTFS is now maintained by <a href="https://mobilitydata.org" rel="nofollow">MobilityData</a>, a nonprofit
-            organization. Changes to the specification go through a community process with input from transit agencies,
-            app developers, and other stakeholders.</p>
+        <p>GTFS is now maintained by <a href="https://mobilitydata.org" target="_blank" rel="noopener">MobilityData</a>, a
+            nonprofit organization. Changes to the specification go through a community process with input from transit
+            agencies, app developers, and other stakeholders. The current text lives in the
+            <a href="https://gtfs.org/documentation/schedule/reference/" target="_blank" rel="noopener">GTFS Schedule
+            reference</a>.</p>
 
         <h2>Related Questions</h2>
         <p>• <a href="what-is-gtfs-used-for.html">What is GTFS used for?</a></p>
@@ -167,13 +197,14 @@
     <footer>
         <div class="container footer-container">
             <div class="footer-brand">
-                <img class="footer-logo" src="favicon.svg?v=2" alt="" aria-hidden="true">
-                <span class="logo-text">GTFS.Guru</span>
+                <img class="footer-logo" src="logo.png" alt="" aria-hidden="true" width="512" height="512">
+                <span class="logo-text">GTFS Guru</span>
                 <p>by Abasis.AI</p>
             </div>
             <div class="footer-links">
                 <a href="index.html#faq">FAQ</a>
                 <a href="faq.html">Guides</a>
+                <a href="notices/">Notice codes</a>
                 <a href="contact.html">Contact</a>
                 <a href="privacy.html">Privacy</a>
                 <a href="terms.html">Terms</a>

@@ -944,7 +944,6 @@ def run_update_baseline(args: argparse.Namespace) -> int:
     return 0
 
 
-
 # ---------------------------------------------------------------------------
 # Coordination
 
@@ -1031,7 +1030,20 @@ def run_check_coordination(args: argparse.Namespace) -> int:
 
     previous_changes_text = git_show(args.base_ref, args.changes)
     current_changes_text = args.changes.read_text(encoding="utf-8")
-    if previous_changes_text == current_changes_text:
+    # Content, not bytes: reindenting the file or moving a trailing comma is not
+    # an explanation of what upstream changed, and the gate should not accept it
+    # as one. A document that does not parse falls back to a text comparison
+    # rather than crashing -- the Rust side is what rejects malformed content.
+    if previous_changes_text is None:
+        changes_moved = True
+    else:
+        try:
+            changes_moved = json.loads(previous_changes_text) != json.loads(
+                current_changes_text
+            )
+        except json.JSONDecodeError:
+            changes_moved = previous_changes_text != current_changes_text
+    if not changes_moved:
         moved_description = "; ".join(moved)
         _, relative_changes = git_location(args.changes)
         print(

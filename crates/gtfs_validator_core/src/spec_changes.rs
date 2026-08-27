@@ -303,14 +303,14 @@ fn check_shape(entry: &SpecChangeEntry, problems: &mut Vec<String>) {
         ));
     }
     if let Some(date) = entry.upstream.date.as_deref() {
-        let dated_yyyy_mm_dd = date.len() == 10
-            && date
-                .chars()
-                .enumerate()
-                .all(|(index, character)| match index {
-                    4 | 7 => character == '-',
-                    _ => character.is_ascii_digit(),
-                });
+        // Bytes throughout: mixing a byte length with a character index would
+        // read a non-ASCII date inconsistently.
+        let bytes = date.as_bytes();
+        let dated_yyyy_mm_dd = bytes.len() == 10
+            && bytes.iter().enumerate().all(|(index, byte)| match index {
+                4 | 7 => *byte == b'-',
+                _ => byte.is_ascii_digit(),
+            });
         if !dated_yyyy_mm_dd {
             problems.push(format!(
                 "`{}` has upstream date `{date}`; expected `YYYY-MM-DD`",
@@ -325,8 +325,17 @@ fn check_shape(entry: &SpecChangeEntry, problems: &mut Vec<String>) {
             entry.id
         ));
     }
+    // The page renders this as an href, so a scheme it would be wrong to
+    // follow is caught here rather than shipped to readers.
     if entry.upstream.url.is_empty() {
         problems.push(format!("`{}` must cite an upstream URL", entry.id));
+    } else if !entry.upstream.url.starts_with("https://")
+        && !entry.upstream.url.starts_with("http://")
+    {
+        problems.push(format!(
+            "`{}` cites upstream URL `{}`; expected an http(s) address",
+            entry.id, entry.upstream.url
+        ));
     }
     if entry.summary.is_empty() {
         problems.push(format!("`{}` must carry a one-sentence summary", entry.id));
@@ -593,6 +602,21 @@ mod tests {
                 .iter()
                 .any(|problem| problem.contains("invented_notice")),
             "expected the unexplained difference to be reported, got {problems:?}"
+        );
+    }
+
+    #[test]
+    fn detects_an_upstream_url_that_is_not_http() {
+        let mut changes = spec_changes().expect("parses").clone();
+        let baseline = spec_baseline().expect("parses");
+        changes.entries[0].upstream.url = "javascript:alert(1)".to_string();
+
+        let problems = validate_spec_changes(&changes, &spec_surface(), baseline);
+        assert!(
+            problems
+                .iter()
+                .any(|problem| problem.contains("expected an http(s) address")),
+            "expected the non-http URL to be reported, got {problems:?}"
         );
     }
 

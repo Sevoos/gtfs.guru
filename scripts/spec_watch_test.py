@@ -443,6 +443,20 @@ class CoordinationCase(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("moved with it", result.stdout)
 
+    def test_reformatting_the_change_log_does_not_count_as_explaining(self) -> None:
+        """Whitespace is not an explanation of a new public claim."""
+        self.write_baseline("b" * 40, "v8.0.1")
+        # Same content, different bytes.
+        document = json.loads(self.changes.read_text(encoding="utf-8"))
+        self.changes.write_text(
+            json.dumps(document, indent=4) + "\n\n", encoding="utf-8"
+        )
+
+        result = self.coordination()
+
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertIn("is unchanged", result.stdout)
+
     def test_a_change_log_absent_from_the_base_counts_as_moved(self) -> None:
         """Adding the file for the first time must not read as "unchanged"."""
         self.git("rm", "--quiet", "--cached", "spec_changes.json")

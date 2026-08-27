@@ -11,6 +11,21 @@ members = [
   "crates/gtfs_validator_python",
   "crates/gtfs_validator_wasm",
 ]
+# A bare `cargo build`/`cargo test` skips the Tauri desktop crate: it pulls the
+# whole webkit2gtk tree and leaves ~4 GB of debug artifacts behind, which is a
+# poor trade for a routine edit-test loop. CI and the pre-PR `--all`/`--workspace`
+# runs still cover it; build it directly with `-p gtfs-guru-gui`.
+default-members = [
+  "crates/gtfs_model",
+  "crates/gtfs_validator_core",
+  "crates/gtfs_validator_report",
+  "crates/gtfs_validator_profile",
+  "crates/gtfs_validator_cli",
+  "crates/gtfs_validator_mcp",
+  "crates/gtfs_validator_web",
+  "crates/gtfs_validator_python",
+  "crates/gtfs_validator_wasm",
+]
 resolver = "2"
 
 [workspace.package]

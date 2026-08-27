@@ -12,7 +12,9 @@ See `docs/system-dependencies.md` for the package list.
 
 ## Essential Commands
 
-- `cargo build` (workspace build)
+- `cargo build` (all crates except the Tauri desktop one, which `default-members`
+  excludes; it costs ~4 GB of debug artifacts and the webkit2gtk tree)
+- `cargo build -p gtfs-guru-gui` (desktop crate, when you are working on it)
 - `cargo build --release -p gtfs-guru` (CLI binary)
 - `cargo run --release -p gtfs-guru-web` (local API server)
 - `cargo test` or `cargo test -p gtfs-guru-core`

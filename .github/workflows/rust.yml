@@ -43,11 +43,13 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      # --workspace is explicit: the manifest sets default-members to exclude
+      # the Tauri desktop crate for local builds, and CI must still cover it.
       - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Run tests
-        run: cargo test --all-features
+        run: cargo test --workspace --all-features
 
   wasm:
     name: WASM Build & Test

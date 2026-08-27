@@ -131,8 +131,10 @@ numbers moved, and `impact` can quote it later.
 **Against MobilityData/gtfs-validator.** Cross-validator differences are
 recorded in `expected_deltas.json` with a reason. Each entry pins both totals,
 so a difference that *changes size* stops being covered and resurfaces. An
-approval that no longer matches any real difference is reported as stale so it
-gets cleaned up.
+approval that no longer matches any real difference is stale and fails the run:
+an allowlist nobody prunes decays into standing permission for a difference no
+one has looked at since. Delete the entry in the commit that removes the
+difference.
 
 ## The parity regression gate
 
@@ -140,7 +142,18 @@ Per feed, weighted: `crash_free` 3, `parse_clean` 3, `notices_stable` 2,
 `features_stable` 1, `java_parity` 2 (only where the Java baseline ran). The
 score is the share of applicable weight earned, and the run fails below
 `min_score` (100 by default) — so a crash, a parse failure or an unexplained
-notice change lowers the score and fails the build, exactly as intended.
+notice change lowers the score and fails the build, exactly as intended. The
+published score is rounded to two places; the pass decision uses the unrounded
+ratio, so a near miss cannot round its way to a perfect run.
+
+A feed the run was asked to validate but for which no result came back fails
+`crash_free` and `parse_clean` rather than being skipped — otherwise a feed that
+never ran would leave the score at 100. A tool absent because the run never
+asked for it (`--tools java`) is still a skip.
+
+`scripts/real_world_parity_test.py` covers these decisions offline, with no
+corpus and no jar; the `Gate tests` job runs it on every pull request that
+touches the harness.
 
 Time and memory are deliberately *not* part of the score. Shared CI runners are
 too noisy for that. They are compared against the baseline with loose thresholds

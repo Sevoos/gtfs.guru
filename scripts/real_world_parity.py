@@ -713,7 +713,18 @@ def evaluate(results: dict, config: dict, deltas: dict) -> dict:
 
         guru = entry.get("guru")
         if guru is None:
-            verdict["warnings"].append("gtfs.guru did not run for this feed")
+            # Absent because the run asked for `--tools java` is a skip; absent
+            # when the run did ask for gtfs.guru means the feed silently never
+            # got validated, which must not read as a pass.
+            if "guru" in (results.get("tools") or []):
+                verdict["checks"] = {"crash_free": False, "parse_clean": False}
+                verdict["passed"] = False
+                verdict["reasons"].append(
+                    "gtfs.guru was requested but produced no result for this feed"
+                )
+                possible += weights["crash_free"] + weights["parse_clean"]
+            else:
+                verdict["warnings"].append("gtfs.guru did not run for this feed")
             feeds_out.append(verdict)
             continue
 
@@ -831,11 +842,17 @@ def evaluate(results: dict, config: dict, deltas: dict) -> dict:
         if (feed, code) not in used_deltas
         and any(f["feed_id"] == feed and "java_diff" in f for f in feeds_out)
     ]
-    score = 100.0 if possible == 0 else round(100.0 * earned / possible, 2)
+    # The published score is rounded, the decision is not: at min_score 100 a
+    # rounded 99.995 would otherwise read as a perfect run.
+    ratio = 100.0 if possible == 0 else 100.0 * earned / possible
+    score = round(ratio, 2)
     return {
         "score": score,
         "min_score": config["gate"]["min_score"],
-        "passed": score >= config["gate"]["min_score"],
+        # A stale approval is an allowlist entry that no longer describes a real
+        # difference. Leaving it advisory lets the list rot into permission for
+        # a difference nobody has looked at since.
+        "passed": ratio >= config["gate"]["min_score"] and not stale,
         "feeds": feeds_out,
         "stale_expected_deltas": stale,
         "checks_applied": sorted(
@@ -876,7 +893,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
 
     for entry in report["stale_expected_deltas"]:
         print(
-            f"!        stale expected delta {entry['feed_id']}/{entry['code']} no "
+            f"FAIL     stale expected delta {entry['feed_id']}/{entry['code']} no "
             "longer matches a real difference; remove it from expected_deltas.json"
         )
 

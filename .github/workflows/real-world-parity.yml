@@ -34,6 +34,7 @@ on:
       - "scripts/real_world/**"
       - "scripts/real_world_corpus.py"
       - "scripts/real_world_parity.py"
+      - "scripts/real_world_parity_test.py"
       - "scripts/ci_real_world.sh"
       - "Cargo.lock"
       - "Cargo.toml"
@@ -47,6 +48,7 @@ on:
       - "scripts/real_world/**"
       - "scripts/real_world_corpus.py"
       - "scripts/real_world_parity.py"
+      - "scripts/real_world_parity_test.py"
       - "scripts/ci_real_world.sh"
       - "Cargo.lock"
       - "Cargo.toml"
@@ -67,6 +69,25 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # The gate decides whether a run is a regression, so it gets tested like any
+  # other decision-maker. Offline and seconds long: no corpus, no jar, no cargo,
+  # which is why it does not wait on the parity job or its caches.
+  gate-tests:
+    name: Gate tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Parity gate tests
+        run: python3 scripts/real_world_parity_test.py
+
   parity:
     # A weekly full-parity run in a fork would spend twenty minutes and a 40 MB
     # jar download to produce a report nobody reads, so the schedule is limited

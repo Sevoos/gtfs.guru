@@ -18,7 +18,7 @@ All types of contributions are encouraged and valued. See the [Table of Contents
 
 ## I Have a Question
 
-> If you want to ask a question, we assume that you have read the available [Documentation](https://gtfs.guru).
+> If you want to ask a question, we assume that you have read the available [Documentation](https://abasis-ltd.github.io/gtfs.guru).
 
 Before you ask a question, it is best to search for existing [Issues](https://github.com/abasis-ltd/gtfs.guru/issues) that might help you. In case you've found a suitable issue and still need clarification, you can write your question in this issue. It is also advisable to search the internet for answers first.
 
@@ -72,19 +72,56 @@ You will need [Rust](https://www.rust-lang.org/tools/install) installed. We reco
 
 See [`docs/system-dependencies.md`](docs/system-dependencies.md) for the package list.
 
-### Building parts of the project
+### Project layout
 
-The project is a workspace with multiple crates.
+This monorepo houses the whole ecosystem. `gtfs_validator_core` is the
+validation engine; every front-end is a thin wrapper around it and
+`gtfs_validator_report`:
 
-- Core logic: `crates/gtfs_validator_core`
-- CLI tool: `crates/gtfs_validator_cli`
-- Web view: `crates/gtfs_validator_web`
+```mermaid
+graph LR
+    model["gtfs_model<br/>shared GTFS types"] --> core["gtfs_validator_core<br/>110 validators"]
+    core --> report["gtfs_validator_report<br/>JSON · HTML · SARIF"]
+    core --> profile["gtfs_validator_profile<br/>deterministic feed facts"]
+    report --> cli["gtfs_validator_cli<br/>gtfs-guru binary"]
+    profile --> cli
+    profile --> mcp["gtfs_validator_mcp<br/>MCP server"]
+    report --> web["gtfs_validator_web<br/>Axum API server"]
+    report --> gui["gtfs_validator_gui<br/>Tauri desktop app"]
+    report --> wasm["gtfs_validator_wasm<br/>browser bindings"]
+    report --> python["gtfs_validator_python<br/>PyO3 bindings"]
+```
 
-To build the entire workspace:
+| Crate | Role |
+| --- | --- |
+| [`crates/gtfs_model`](crates/gtfs_model) | Shared GTFS data model types |
+| [`crates/gtfs_validator_core`](crates/gtfs_validator_core) | The validation engine (110 validators) |
+| [`crates/gtfs_validator_report`](crates/gtfs_validator_report) | Report generation (JSON / HTML / SARIF) |
+| [`crates/gtfs_validator_profile`](crates/gtfs_validator_profile) | Deterministic feed facts behind `profile` and `explain` |
+| [`crates/gtfs_validator_cli`](crates/gtfs_validator_cli) | The `gtfs-guru` command-line tool |
+| [`crates/gtfs_validator_mcp`](crates/gtfs_validator_mcp) | Read-only MCP server for LLM clients |
+| [`crates/gtfs_validator_web`](crates/gtfs_validator_web) | Web API service (Axum) |
+| [`crates/gtfs_validator_gui`](crates/gtfs_validator_gui) | Desktop application (Tauri) |
+| [`crates/gtfs_validator_python`](crates/gtfs_validator_python) | Python bindings (PyO3 / Maturin) |
+| [`crates/gtfs_validator_wasm`](crates/gtfs_validator_wasm) | WebAssembly bindings for the browser |
+
+### Building
+
+Build the entire workspace:
 
 ```bash
 cargo build
 ```
+
+Or just one crate, which is much faster:
+
+```bash
+cargo build --release -p gtfs-guru
+```
+
+Per-crate implementation notes for contributors live in
+[`docs/agents/`](docs/agents), and the repository-wide conventions in
+[`AGENTS.md`](AGENTS.md).
 
 ### Running Tests
 

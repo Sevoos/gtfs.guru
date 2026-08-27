@@ -13,6 +13,28 @@ gtfs-guru --input /path/to/gtfs.zip --output_base ./report
 gtfs-guru --url https://example.com/gtfs.zip --output_base ./report
 ```
 
+Add `--storage_directory /tmp/gtfs` to keep a downloaded feed around instead of
+re-fetching it.
+
+### Output files
+
+Written into `--output_base`:
+
+| File | Written |
+| --- | --- |
+| `report.json` | always (rename with `--validation_report_name`) |
+| `report.html` | always (rename with `--html_report_name`) |
+| `system_errors.json` | always (rename with `--system_errors_report_name`) |
+| the name given to `--sarif` | with `--sarif` |
+| `notice_schema.json` | with `--export_notices_schema` |
+
+`--sarif` takes a file name resolved inside `--output_base`. Badges are the
+exception: they go to the exact path you name — see
+[Status badges](#status-badges).
+
+With `--stdout`, the JSON report goes to standard output and no report files are
+written.
+
 ### CLI Options
 
 | Option | Short | Description |
@@ -33,7 +55,7 @@ gtfs-guru --url https://example.com/gtfs.zip --output_base ./report
 | `--validated-at <TIMESTAMP>` | | Override `validated_at` in report metadata |
 | `--threads <N>` | | Number recorded in report metadata; does not size the thread pool |
 | `--google_rules` | | Enable Google-specific rules |
-| `--sarif <FILE>` | | Write SARIF report for CI/CD |
+| `--sarif <NAME>` | | Write a SARIF report for CI/CD into `--output_base` |
 | `--fail-on <LEVEL>` | | `none` (default), `error`, or `warning`; exit 2 at that severity |
 | `--badge <PATH>` | | Write a shields.io endpoint descriptor for a README badge |
 | `--badge-svg <PATH>` | | Write a self-contained SVG badge |
@@ -52,6 +74,48 @@ supported field values, trims declared GTFS fields, and sorts `stop_times.txt`
 by trip and `stop_sequence`. `--fix-unsafe` can additionally delete rows whose
 foreign key references a missing parent. After writing the copy, the CLI
 validates it again and reports resolved, remaining, and introduced notices.
+
+Ambiguous values are deliberately left alone — `01-05-2026` (day-first or
+month-first?) and `1,500` (1.5 or 1500?) get no suggestion at all. See
+[Fixes](llm.md#fixes) for the notice-by-notice repair table and its safety
+levels.
+
+### Subcommands
+
+#### `diff` — compare two feed versions
+
+```bash
+gtfs-guru diff old.zip new.zip
+gtfs-guru diff old.zip new.zip --json diff.json --markdown diff.md --fail-on-new-errors
+```
+
+The diff covers agencies, routes, stops, route-level trip and frequency
+aggregates, and validation notice deltas. Under `--fail-on-new-errors` it exits
+`2` when the new feed adds error occurrences. `--no-validation` gives a faster
+structural-only comparison.
+
+#### `profile` and `explain` — deterministic feed facts
+
+```bash
+gtfs-guru profile -i feed.zip --date 2026-07-27 --pretty
+gtfs-guru explain -i feed.zip --date 2026-07-27
+gtfs-guru explain -i feed.zip --json --pretty
+```
+
+`profile` reports unique entity counts, route types, completeness facts, seven
+actual service dates with calendar exceptions applied, and exact grouped
+validation totals. `explain` is derived from nothing but that profile, so every
+statement can be checked and no feed is sent to an LLM provider.
+
+#### `spec-surface` — what this build answers for
+
+```bash
+gtfs-guru spec-surface --pretty
+```
+
+Prints the files, fields, enum values, and notice codes the build supports,
+along with the specification revision and canonical validator release it was
+checked against.
 
 ### Which standard a report answers for
 
@@ -134,22 +198,60 @@ and they work with `--stdout` too.
 
 [shields-endpoint]: https://shields.io/badges/endpoint-badge
 
-### GitHub Actions
+### Continuous integration
 
-The repository ships a composite action that installs the binary, runs it,
-uploads SARIF to code scanning, and fails the job on a bad feed:
+#### GitHub Actions
+
+The repository ships a composite action that installs a checksum-verified
+binary, runs it, uploads SARIF to code scanning, and fails the job on a bad
+feed:
 
 ```yaml
-- uses: actions/checkout@v4
-- uses: abasis-ltd/gtfs.guru/action@v1
-  with:
-    feed: feed.zip
-    fail-on: error
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # so SARIF reaches the Security tab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: abasis-ltd/gtfs.guru/action@v1
+        with:
+          feed: feed.zip
+          fail-on: error
 ```
 
 See [`action/README.md`](https://github.com/abasis-ltd/gtfs.guru/blob/main/action/README.md)
-for every input, the outputs it
-sets, and the badge-publishing recipe.
+for every input, the outputs it sets, and the badge-publishing recipe.
+
+Or drive the CLI yourself:
+
+```yaml
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install gtfs-guru
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/abasis-ltd/gtfs.guru/main/scripts/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Run validation
+        run: gtfs-guru -i feed.zip -o out --fail-on error
+```
+
+#### GitLab CI
+
+```yaml
+validate:
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update && apt-get install -y ca-certificates curl
+    - curl -fsSL https://raw.githubusercontent.com/abasis-ltd/gtfs.guru/main/scripts/install.sh | bash
+    - export PATH="$HOME/.local/bin:$PATH"
+  script:
+    - gtfs-guru -i feed.zip -o out --fail-on error
+```
 
 ## Web API
 

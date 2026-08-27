@@ -1,0 +1,107 @@
+{
+  "feed_id": "mdb-502",
+  "dataset_id": "mdb-502-202608120116",
+  "counts": {
+    "errors": 6,
+    "warnings": 481,
+    "infos": 3
+  },
+  "features": [
+    "Bike Allowed",
+    "Fare Media",
+    "Fare Products",
+    "Fare Transfers",
+    "Feed Information",
+    "Headsigns",
+    "In-station Traversal Time",
+    "Levels",
+    "Location Types",
+    "Pathway Connections",
+    "Pathway Details",
+    "Pathway Signs",
+    "Rider Categories",
+    "Route Colors",
+    "Route-Based Fares",
+    "Shapes",
+    "Stops Wheelchair Accessibility",
+    "Trips Wheelchair Accessibility"
+  ],
+  "notices": {
+    "expired_calendar": {
+      "severity": "WARNING",
+      "total": 2
+    },
+    "fast_travel_between_consecutive_stops": {
+      "severity": "WARNING",
+      "total": 221
+    },
+    "feed_expiration_date30_days": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "missing_feed_contact_email_and_url": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "mixed_case_recommended_field": {
+      "severity": "WARNING",
+      "total": 6
+    },
+    "pathway_dangling_generic_node": {
+      "severity": "WARNING",
+      "total": 4
+    },
+    "pathway_unreachable_location": {
+      "severity": "ERROR",
+      "total": 6
+    },
+    "route_long_name_contains_short_name": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "service_has_no_active_day_of_the_week": {
+      "severity": "WARNING",
+      "total": 6
+    },
+    "service_never_active": {
+      "severity": "WARNING",
+      "total": 5
+    },
+    "stop_too_far_from_shape_using_user_distance": {
+      "severity": "WARNING",
+      "total": 9
+    },
+    "stop_without_stop_time": {
+      "severity": "WARNING",
+      "total": 2
+    },
+    "trip_distance_exceeds_shape_distance_below_threshold": {
+      "severity": "WARNING",
+      "total": 216
+    },
+    "unknown_file": {
+      "severity": "INFO",
+      "total": 2
+    },
+    "unused_shape": {
+      "severity": "WARNING",
+      "total": 7
+    },
+    "unused_station": {
+      "severity": "INFO",
+      "total": 1
+    }
+  },
+  "perf": {
+    "wall_seconds": 7.98,
+    "peak_rss_mb": 535.8,
+    "threads": 1,
+    "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
+  },
+  "last_change": {
+    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
+    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "validator_version": "1.0.0",
+    "host_platform": "linux"
+  }
+}

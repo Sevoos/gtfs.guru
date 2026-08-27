@@ -1,0 +1,75 @@
+{
+  "feed_id": "mdb-205",
+  "dataset_id": "mdb-205-202608090105",
+  "counts": {
+    "errors": 0,
+    "warnings": 131,
+    "infos": 475
+  },
+  "features": [
+    "Feed Information",
+    "Headsigns",
+    "Levels",
+    "Location Types",
+    "Pathway Connections",
+    "Pathway Details",
+    "Route Colors",
+    "Shapes",
+    "Stops Wheelchair Accessibility",
+    "Trips Wheelchair Accessibility"
+  ],
+  "notices": {
+    "equal_shape_distance_same_coordinates": {
+      "severity": "WARNING",
+      "total": 38
+    },
+    "feed_valid_beyond_total_service_window": {
+      "severity": "INFO",
+      "total": 1
+    },
+    "platform_without_parent_station": {
+      "severity": "INFO",
+      "total": 126
+    },
+    "route_color_contrast": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "same_name_and_description_for_route": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "trip_coverage_not_active_for_next7_days": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "unknown_column": {
+      "severity": "INFO",
+      "total": 7
+    },
+    "unknown_file": {
+      "severity": "INFO",
+      "total": 2
+    },
+    "unsorted_stop_times": {
+      "severity": "INFO",
+      "total": 339
+    },
+    "unused_shape": {
+      "severity": "WARNING",
+      "total": 90
+    }
+  },
+  "perf": {
+    "wall_seconds": 6.471,
+    "peak_rss_mb": 512.3,
+    "threads": 1,
+    "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
+  },
+  "last_change": {
+    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
+    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "validator_version": "1.0.0",
+    "host_platform": "linux"
+  }
+}

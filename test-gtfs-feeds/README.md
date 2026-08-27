@@ -8,7 +8,7 @@ Each subdirectory represents a specific error case with all necessary GTFS files
 ```
 test-gtfs-feeds/
 ├── base-valid/           # Valid GTFS feed for reference
-├── real-world/           # Links to published feeds for parity checks (fetched, not committed)
+├── real-world/           # Trimmed slices of real published feeds (committed)
 ├── errors/               # Error test cases by category
 │   ├── booking-rules/    # booking_rules.txt errors (GTFS-Flex)
 │   ├── core-files/       # File-level errors
@@ -404,24 +404,26 @@ zip -r test.zip *.txt
 java -jar gtfs-validator.jar -i test.zip -o output
 ```
 
-## Real-World Feeds (`real-world/`)
+## Real-World Fixtures (`real-world/`)
 
-Published feeds from five agencies, used for parity checks against the canonical
-validator. Unlike everything else here they are **not committed**: together they
-weigh ~143 MB and their publishers refresh them continuously, so the repository
-keeps only `real-world/manifest.json` -- the source link, license and snapshot
-SHA-256 for each feed.
+Some shapes cannot be hand-authored. A 9,000-row pathway graph with fare gates,
+exit gates and negative stair counts only exists in a feed a real agency
+publishes. So `real-world/` holds slices of real feeds, trimmed to just the
+tables a test reads, committed like any other fixture.
 
-Fetch them with:
+`boston_mbta_pathways.zip` is 450 KiB of MBTA's `pathways.txt` and `stops.txt`,
+carved out of a 17 MiB snapshot. `manifest.json` records its provenance, its
+per-member hashes and how to verify or rebuild it.
 
-```bash
-scripts/fetch_real_world_feeds.py
-```
+Trimming is what makes committing defensible, and freezing is what makes the
+test sharp: because the bytes never move, the test asserts exact counts -- 9,293
+pathways, 441 of them with a negative `stair_count`, 120 fare gates, 150 exit
+gates -- instead of comparing the feed against itself.
 
-The downloads land in `real-world/`, which `.gitignore` keeps untracked. Tests
-that use these feeds skip when they are absent, so a clean checkout runs green
-and offline. See `scripts/README.md` for the flags and the environment variables
-that make a missing feed a hard failure instead.
+Whole real feeds are deliberately **not** here. Ecosystem parity against
+complete feeds is the pinned corpus's job (`scripts/real_world/corpus.json`),
+which downloads on demand and verifies by hash. See
+`docs/real-world-parity.md`.
 
 ## Adding New Test Cases
 

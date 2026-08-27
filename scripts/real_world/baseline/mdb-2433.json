@@ -1,0 +1,51 @@
+{
+  "feed_id": "mdb-2433",
+  "dataset_id": "mdb-2433-202605140142",
+  "counts": {
+    "errors": 0,
+    "warnings": 65,
+    "infos": 0
+  },
+  "features": [
+    "Bike Allowed",
+    "Fare Media",
+    "Fare Products",
+    "Feed Information",
+    "Headsigns",
+    "Location Types",
+    "Route Colors",
+    "Shapes",
+    "Stops Wheelchair Accessibility",
+    "Trips Wheelchair Accessibility"
+  ],
+  "notices": {
+    "stop_too_far_from_shape_using_user_distance": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "trip_coverage_not_active_for_next7_days": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "trip_distance_exceeds_shape_distance_below_threshold": {
+      "severity": "WARNING",
+      "total": 62
+    },
+    "unused_shape": {
+      "severity": "WARNING",
+      "total": 1
+    }
+  },
+  "perf": {
+    "wall_seconds": 0.035,
+    "peak_rss_mb": 23.1,
+    "threads": 1,
+    "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
+  },
+  "last_change": {
+    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
+    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "validator_version": "1.0.0",
+    "host_platform": "linux"
+  }
+}

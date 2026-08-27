@@ -5,6 +5,8 @@
 # Local AI coding sessions may contain full worktrees and conversation data.
 .claude/
 /golden_actual/
+# Real-world parity run outputs; the pinned corpus .zip files live under
+# /benchmark-feeds/ (also ignored) and must never be committed.
 /real_world_actual/
 /scripts/golden_manifest.tsv
 /node_modules/
@@ -24,9 +26,9 @@ __pycache__/
 /tmp/
 /benchmark-feeds/
 # Ignored so local scratch feeds stay out; the checked-in fixtures under it are
-# tracked and were added with `git add -f`. The real-world/ feeds are the
-# exception: only their manifest is tracked, and the zips this rule keeps
-# untracked are fetched by scripts/fetch_real_world_feeds.py.
+# tracked and were added with `git add -f`. That includes real-world/, which holds
+# trimmed slices of real feeds -- see test-gtfs-feeds/README.md. Whole real feeds
+# are downloaded into /benchmark-feeds/real-world/ instead and are never committed.
 /test-gtfs-feeds/
 /mobility-data-test-feeds/
 /expected-nl/

@@ -41,6 +41,27 @@ Golden tests compare validator output against expected reference files.
 | `update_expected_from_manifest.py` | Updates expected outputs from actual validator results. |
 | `compare_reports.py` | Compares two validator output directories (JSON + HTML). |
 
+## Real-World Parity
+
+Ecosystem checks against twelve pinned MobilityData datasets (flexible services,
+Fares v2, pathways; 31 KiB to 229 MiB unpacked). The feed `.zip` files are never
+committed. See `docs/real-world-parity.md`.
+
+| Script | Description |
+|--------|-------------|
+| `real_world_corpus.py` | Fetches, verifies and drift-checks the pinned corpus; prints the coverage matrix. |
+| `real_world_parity.py` | Runs both validators, gates the result, renders reports, updates baselines, and builds the release impact report. |
+| `ci_real_world.sh` | CI wrapper; `MODE=self` for per-commit, `MODE=full` to add the Java baseline. |
+
+### Real-World Parity Data Files
+
+| File | Description |
+|------|-------------|
+| `real_world/corpus.json` | Pinned feeds with dataset ids, hashes, sizes and per-feed rationale. |
+| `real_world/gate.json` | Java baseline pin, timeouts, performance thresholds and gate weights. |
+| `real_world/expected_deltas.json` | Approved gtfs.guru vs Java differences. |
+| `real_world/baseline/*.json` | Per-feed committed notice fingerprints and counts. |
+
 ### Golden Test Configuration Files
 
 | File | Description |
@@ -48,27 +69,6 @@ Golden tests compare validator output against expected reference files.
 | `golden.env.example` | Example environment variables for golden tests. |
 | `golden_manifest.example.tsv` | Example TSV manifest format for golden tests. |
 | `expected_layout.example.txt` | Example expected output directory structure. |
-
-## Real-World Parity Feeds
-
-Five published feeds used for parity checks against the canonical validator.
-They are not committed -- `test-gtfs-feeds/real-world/manifest.json` keeps the
-link, license and snapshot SHA-256 for each, and this script turns those links
-back into files under `test-gtfs-feeds/real-world/`, which `.gitignore` keeps
-untracked.
-
-| Script | Description |
-|--------|-------------|
-| `fetch_real_world_feeds.py` | Downloads the feeds from the manifest links, verifies each against the recorded SHA-256, and reports upstream drift. `--check` verifies without network, `--list` prints the catalog, `--feed NAME` fetches one. |
-
-Publishers refresh these feeds continuously, so a download normally will *not*
-reproduce the recorded SHA-256; the script says so and records what it actually
-got in `fetched.json`. Pass `--require-frozen` to turn drift into a failure.
-
-`cargo test` skips the real-world checks when the feeds are absent, so a clean
-checkout stays green and offline. Set `GTFS_GURU_REQUIRE_REAL_WORLD=1` to make a
-missing feed a failure instead, and `GTFS_GURU_REAL_WORLD_DIR` to read them from
-somewhere other than `test-gtfs-feeds/real-world/`.
 
 ## Upstream Spec Watch
 

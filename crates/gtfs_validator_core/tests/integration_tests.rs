@@ -2,7 +2,7 @@ use gtfs_guru_core::{
     input::GtfsInput, rules::PathwayReachableLocationValidator, GtfsFeed, NoticeContainer,
     NoticeSeverity, StringPool, Validator,
 };
-use gtfs_guru_model::{Pathway, Stop};
+use gtfs_guru_model::{Pathway, PathwayMode, Stop};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -19,45 +19,20 @@ fn test_feeds_root() -> PathBuf {
     project_root().join("test-gtfs-feeds")
 }
 
-const REAL_WORLD_DIR_ENV: &str = "GTFS_GURU_REAL_WORLD_DIR";
-const REAL_WORLD_REQUIRED_ENV: &str = "GTFS_GURU_REQUIRE_REAL_WORLD";
-
-fn env_flag(name: &str) -> bool {
-    match std::env::var(name) {
-        Ok(value) => !value.is_empty() && value != "0",
-        Err(_) => false,
-    }
-}
-
-/// Locates a real-world parity feed, or `None` when it has not been fetched.
-///
-/// These feeds are third-party downloads, not fixtures: they weigh ~143 MB and
-/// their publishers refresh them continuously, so the repository keeps only the
-/// links in `test-gtfs-feeds/real-world/manifest.json`. Run
-/// `scripts/fetch_real_world_feeds.py` to turn those links back into files.
-///
-/// A clean checkout skips rather than fails. Set `GTFS_GURU_REQUIRE_REAL_WORLD=1`
-/// to make a missing feed an error, which is what a parity run wants.
-fn real_world_feed(file_name: &str) -> Option<PathBuf> {
-    let root = std::env::var_os(REAL_WORLD_DIR_ENV)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| test_feeds_root().join("real-world"));
-    let path = root.join(file_name);
-    if path.is_file() {
-        return Some(path);
-    }
-
+/// The frozen slice of the MBTA feed, carrying only the two tables this test
+/// reads. Committed, so the numbers below are facts about a known input rather
+/// than whatever the publisher served today. See
+/// `test-gtfs-feeds/real-world/manifest.json` for its provenance.
+fn mbta_pathway_fixture() -> PathBuf {
+    let path = test_feeds_root()
+        .join("real-world")
+        .join("boston_mbta_pathways.zip");
     assert!(
-        !env_flag(REAL_WORLD_REQUIRED_ENV),
-        "{REAL_WORLD_REQUIRED_ENV} is set but {path:?} is missing. \
-         Run scripts/fetch_real_world_feeds.py to fetch it."
+        path.is_file(),
+        "committed fixture missing at {path:?}; it is tracked, so a clean \
+         checkout always has it"
     );
-    eprintln!(
-        "skipping real-world parity check: {path:?} is not fetched. \
-         Run scripts/fetch_real_world_feeds.py, or point {REAL_WORLD_DIR_ENV} \
-         at a directory that already holds the feeds."
-    );
-    None
+    path
 }
 
 /// Counts the data records in a CSV payload the way the loader reads it:
@@ -107,9 +82,7 @@ fn test_base_valid() {
 
 #[test]
 fn test_mbta_pathways_are_fully_loaded_and_reachable() {
-    let Some(feed_path) = real_world_feed("boston_mbta.zip") else {
-        return;
-    };
+    let feed_path = mbta_pathway_fixture();
 
     let input = GtfsInput::from_path(&feed_path).expect("Failed to create MBTA input");
     let reader = input.reader();
@@ -125,17 +98,55 @@ fn test_mbta_pathways_are_fully_loaded_and_reachable() {
         .read_csv_with_notices::<Pathway>("pathways.txt", &mut load_notices, &pool)
         .expect("Failed to read MBTA pathways.txt");
 
-    // MBTA republishes its feed continuously, so the row count is not a constant
-    // to pin down. The invariant that survives a refresh is that no row is
-    // silently dropped: MBTA spells descending stairs as a negative
-    // `stair_count`, which a narrower integer type would reject row by row.
-    // Row equality is what catches that -- `csv_parsing_failed` is suppressed
-    // outside thorough mode, so asserting its absence here would prove nothing.
+    // The fixture is frozen, so these are exact expectations rather than a
+    // self-comparison. Both halves matter: the raw record count proves the
+    // fixture itself has not been swapped, and the row count proves the loader
+    // kept every record.
+    assert_eq!(
+        csv_record_count(&raw_pathways),
+        9_293,
+        "fixture changed: pathways.txt should hold 9293 records"
+    );
     assert_eq!(
         pathways.rows.len(),
-        csv_record_count(&raw_pathways),
-        "every MBTA pathway row, including negative stair_count values, must deserialize"
+        9_293,
+        "every MBTA pathway row must deserialize; none may be dropped"
     );
+    assert_eq!(
+        stops.rows.len(),
+        10_293,
+        "every MBTA stop row must deserialize; none may be dropped"
+    );
+
+    // The defect this fixture exists for. MBTA spells descending stairs as a
+    // negative `stair_count`, which a narrower integer type rejects row by row.
+    // Counting the surviving negatives proves the sign was preserved, not just
+    // that the row arrived -- a `u32` field would drop all 441 and an unsigned
+    // reinterpretation would keep the rows while corrupting every value.
+    let descending = pathways
+        .rows
+        .iter()
+        .filter(|pathway| pathway.stair_count.is_some_and(|count| count < 0))
+        .count();
+    assert_eq!(
+        descending, 441,
+        "negative stair_count values must survive with their sign intact"
+    );
+
+    // Fare gates and exit gates are the modes with their own validation rules,
+    // and a frozen input is what lets us assert they are actually present to be
+    // validated rather than hoping today's feed still has some.
+    let mode_count = |mode: PathwayMode| {
+        pathways
+            .rows
+            .iter()
+            .filter(|pathway| pathway.pathway_mode == mode)
+            .count()
+    };
+    assert_eq!(mode_count(PathwayMode::FareGate), 120, "fare gates");
+    assert_eq!(mode_count(PathwayMode::ExitGate), 150, "exit gates");
+    assert_eq!(mode_count(PathwayMode::Elevator), 486, "elevators");
+    assert_eq!(mode_count(PathwayMode::Escalator), 187, "escalators");
 
     let feed = GtfsFeed {
         stops,

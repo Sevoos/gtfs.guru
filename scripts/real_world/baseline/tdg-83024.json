@@ -1,0 +1,86 @@
+{
+  "feed_id": "tdg-83024",
+  "dataset_id": "tdg-83024-202608140131",
+  "counts": {
+    "errors": 2,
+    "warnings": 13356,
+    "infos": 4982
+  },
+  "features": [
+    "Bike Allowed",
+    "Fare Media",
+    "Fare Products",
+    "Fare Transfers",
+    "Feed Information",
+    "Headsigns",
+    "Location Types",
+    "Rider Categories",
+    "Route Colors",
+    "Route-Based Fares",
+    "Shapes",
+    "Stops Wheelchair Accessibility",
+    "Trips Wheelchair Accessibility"
+  ],
+  "notices": {
+    "big_gap_in_service": {
+      "severity": "INFO",
+      "total": 109
+    },
+    "duplicate_key": {
+      "severity": "ERROR",
+      "total": 2
+    },
+    "expired_calendar": {
+      "severity": "WARNING",
+      "total": 2
+    },
+    "fast_travel_between_consecutive_stops": {
+      "severity": "WARNING",
+      "total": 80
+    },
+    "mixed_case_recommended_field": {
+      "severity": "WARNING",
+      "total": 11968
+    },
+    "route_long_name_contains_short_name": {
+      "severity": "WARNING",
+      "total": 1
+    },
+    "service_has_no_active_day_of_the_week": {
+      "severity": "WARNING",
+      "total": 34
+    },
+    "stop_without_stop_time": {
+      "severity": "WARNING",
+      "total": 1266
+    },
+    "stops_match_shape_out_of_order": {
+      "severity": "WARNING",
+      "total": 5
+    },
+    "trip_headsign_matches_intermediate_stop": {
+      "severity": "INFO",
+      "total": 4839
+    },
+    "unknown_column": {
+      "severity": "INFO",
+      "total": 14
+    },
+    "unused_station": {
+      "severity": "INFO",
+      "total": 20
+    }
+  },
+  "perf": {
+    "wall_seconds": 11.277,
+    "peak_rss_mb": 835.8,
+    "threads": 1,
+    "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
+  },
+  "last_change": {
+    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
+    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "validator_version": "1.0.0",
+    "host_platform": "linux"
+  }
+}

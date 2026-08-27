@@ -332,5 +332,141 @@ class SpecParserCase(unittest.TestCase):
         self.assertEqual(stops["parent_station"]["enumValues"], [])
 
 
+class CoordinationCase(unittest.TestCase):
+    """`check-coordination` in a throwaway repository.
+
+    The check exists so a baseline move cannot land without the public change
+    log moving with it, which makes "does it actually fail?" the only question
+    worth testing. Each test commits a starting state, edits it, and runs the
+    command against the first commit.
+    """
+
+    def setUp(self) -> None:
+        self.repo = pathlib.Path(tempfile.mkdtemp(prefix="spec-watch-coord-"))
+        self.addCleanup(shutil.rmtree, self.repo, True)
+        self.baseline = self.repo / "spec_baseline.json"
+        self.changes = self.repo / "spec_changes.json"
+        self.git("init", "--quiet", "--initial-branch", "main")
+        self.git("config", "user.email", "spec-watch@example.invalid")
+        self.git("config", "user.name", "Spec Watch Test")
+
+        self.write_baseline("a" * 40, "v8.0.1")
+        self.changes.write_text(
+            json.dumps({"window": {"sinceVersion": "1.0.0"}, "entries": []}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        self.git("add", ".")
+        self.git("commit", "--quiet", "-m", "baseline")
+
+    def git(self, *args: str) -> None:
+        subprocess.run(
+            ["git", "-C", str(self.repo), *args],
+            check=True,
+            capture_output=True,
+        )
+
+    def write_baseline(self, commit: str, version: str) -> None:
+        self.baseline.write_text(
+            json.dumps(
+                {
+                    "specRevision": {"repository": "google/transit", "commit": commit},
+                    "canonicalBaseline": {
+                        "repository": "MobilityData/gtfs-validator",
+                        "version": version,
+                    },
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def coordination(self) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "check-coordination",
+                "--baseline",
+                str(self.baseline),
+                "--changes",
+                str(self.changes),
+                "--base-ref",
+                "HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            env={"PATH": "/usr/bin:/bin"},
+        )
+
+    def test_an_unmoved_baseline_is_quiet(self) -> None:
+        result = self.coordination()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("baseline unchanged", result.stdout)
+
+    def test_a_moved_spec_revision_without_a_change_log_entry_fails(self) -> None:
+        self.write_baseline("b" * 40, "v8.0.1")
+
+        result = self.coordination()
+
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertIn("specification revision", result.stderr)
+        self.assertIn("spec_changes.json", result.stderr)
+        # The annotation is what surfaces on the pull request itself.
+        self.assertIn("::error file=spec_changes.json::", result.stdout)
+
+    def test_a_moved_canonical_release_without_a_change_log_entry_fails(self) -> None:
+        self.write_baseline("a" * 40, "v8.1.0")
+
+        result = self.coordination()
+
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertIn("canonical release v8.0.1 -> v8.1.0", result.stderr)
+
+    def test_a_moved_baseline_with_a_moved_change_log_passes(self) -> None:
+        self.write_baseline("b" * 40, "v8.1.0")
+        self.changes.write_text(
+            json.dumps(
+                {
+                    "window": {"sinceVersion": "1.0.0"},
+                    "entries": [{"id": "transfers.txt/min_transfer_time"}],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.coordination()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("moved with it", result.stdout)
+
+    def test_reformatting_the_change_log_does_not_count_as_explaining(self) -> None:
+        """Whitespace is not an explanation of a new public claim."""
+        self.write_baseline("b" * 40, "v8.0.1")
+        # Same content, different bytes.
+        document = json.loads(self.changes.read_text(encoding="utf-8"))
+        self.changes.write_text(
+            json.dumps(document, indent=4) + "\n\n", encoding="utf-8"
+        )
+
+        result = self.coordination()
+
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertIn("is unchanged", result.stdout)
+
+    def test_a_change_log_absent_from_the_base_counts_as_moved(self) -> None:
+        """Adding the file for the first time must not read as "unchanged"."""
+        self.git("rm", "--quiet", "--cached", "spec_changes.json")
+        self.git("commit", "--quiet", "-m", "drop the change log")
+        self.write_baseline("b" * 40, "v8.0.1")
+
+        result = self.coordination()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

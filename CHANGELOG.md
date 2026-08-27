@@ -9,6 +9,24 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A public compatibility page at <https://gtfs.guru/compatibility/>, generated and
+  committed alongside the notice pages. It names the GTFS specification revision
+  and the canonical validator release this build answers for, lists what changed
+  upstream recently with a support status and a source for each, maps all 191
+  notice codes to their canonical rule (or marks them as GTFS Guru additions or
+  as deprecated upstream), states every accepted difference, and shows the
+  per-file column coverage. Linked from every website page's footer, from the
+  home page, from the documentation, and from the release notes.
+- `crates/gtfs_validator_core/spec_changes.json`: the curated, versioned record
+  of recent upstream changes and this build's support status for each, with
+  `gtfs_guru_core::validate_spec_changes` checking every claim against the
+  build's own spec surface and the baseline's accepted differences. A claim the
+  build does not satisfy fails `cargo test`.
+- Two CI gates against stale or self-contradictory metadata: `cargo run -p
+  gtfs-guru-web --bin generate-notice-pages -- --check` now runs on every Rust
+  CI build, so committed generated pages cannot fall behind the code; and
+  `scripts/spec_watch.py check-coordination` fails a pull request that moves the
+  baseline without moving the change log the page is built from.
 - Spec Watch: a weekly CI run that compares the GTFS specification
   (`google/transit`) and the canonical validator's published rules against what
   this build supports, and opens or updates a single Linear issue when the two
@@ -21,6 +39,14 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - Every JSON report's `summary` now carries `specRevision` and
   `canonicalBaseline`, so a stored report states which specification revision and
   canonical validator release it was produced against.
+
+### Fixed
+
+- The demo feed archive is stored rather than deflated, so
+  `scripts/build_demo_feed.py --check` agrees with the committed copy on every
+  machine. Deflate output is only stable for a given zlib implementation, so a
+  contributor whose Python links zlib-ng saw the committed archive as stale and a
+  rebuild produced a diff CI rejected. The archive's contents are unchanged.
 
 ## [1.0.0] - 2026-07-28
 

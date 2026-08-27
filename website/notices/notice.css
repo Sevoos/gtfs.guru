@@ -339,6 +339,136 @@ footer > div:last-child { display: flex; gap: 1.4rem; align-items: center; }
 footer > div:last-child a { color: var(--muted); font-size: .8rem; text-decoration: none; }
 footer > div:last-child a:hover { color: var(--text); }
 
+/* Compatibility page ------------------------------------------------------- */
+
+.compat { min-height: 80vh; padding-bottom: 6rem; }
+.compat-baseline {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 0 1rem;
+}
+.baseline-card {
+  padding: 1.35rem 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.baseline-card p { margin: 0; }
+.baseline-label {
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.baseline-value { margin-top: .55rem; font-size: .95rem; word-break: break-word; }
+.baseline-value code { color: var(--accent); font-size: .85rem; }
+.baseline-value a { text-decoration: none; }
+.baseline-value a:hover code { text-decoration: underline; }
+.baseline-meta { margin-top: .35rem; color: var(--muted); font-size: .78rem; }
+
+.compat-section { padding: 3rem 0 0; }
+.compat-section h2 { font-size: 1.5rem; letter-spacing: -0.02em; }
+.compat-section h3 { margin: 2rem 0 .35rem; font-size: 1rem; }
+.compat-section h3 .count {
+  margin-left: .5rem;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: .75rem;
+  font-weight: 500;
+}
+.compat-section > p { max-width: 760px; color: var(--muted); }
+.compat-section pre {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-x: auto;
+  background: var(--surface);
+}
+.compat-section pre code { color: var(--accent); font-size: .82rem; }
+.category-blurb { max-width: 760px; margin: 0 0 1rem; color: var(--muted); font-size: .88rem; }
+.compat-note, .compat-empty { max-width: 760px; color: var(--muted); font-size: .88rem; }
+.compat-empty { padding: 1rem 1.1rem; border: 1px dashed var(--line); border-radius: 6px; }
+
+.change-list { display: grid; gap: .85rem; }
+.change-card {
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.change-card p { margin: .45rem 0 0; font-size: .9rem; }
+.change-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.change-id { margin: 0; font-size: .9rem; font-weight: 600; }
+.change-head code { color: var(--accent); font-size: .82rem; }
+.change-badges { display: flex; flex-wrap: wrap; gap: .4rem; }
+.change-title { font-weight: 600; }
+.change-summary { color: var(--muted); }
+.change-notices { color: var(--muted); font-size: .82rem; }
+.change-notices code { color: var(--accent); font-size: .76rem; }
+.change-source { color: var(--muted); font-size: .78rem; }
+.change-source a { color: var(--accent); }
+
+.status, .badge {
+  padding: .2rem .55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.status code { font-size: .68rem; text-transform: none; }
+.status.supported { border-color: rgba(113, 201, 255, .5); color: var(--info); }
+.status.accepted { border-color: rgba(244, 201, 102, .45); color: var(--warning); }
+.status.unsupported { border-color: rgba(255, 138, 131, .5); color: var(--error); }
+.status.planned { border-color: rgba(99, 199, 245, .4); color: var(--accent); }
+/* Not a status: the flag the behaviour is gated behind, and the release that
+   gained it. Kept deliberately quiet so they read as context, not as verdicts. */
+.status.flag, .status.version { border-style: dashed; }
+.badge.guru { border-color: rgba(99, 199, 245, .4); color: var(--accent); }
+.badge.deprecated { border-color: rgba(244, 201, 102, .45); color: var(--warning); }
+
+/* The correspondence table reuses .notice-row, so only its last column, which
+   carries a badge rather than a filename, needs a different treatment. */
+.compat-row > span:last-child { font-family: var(--sans); font-size: .72rem; }
+.compat-row > span:last-child a { color: var(--accent); }
+
+.table-scroll { overflow-x: auto; margin-top: 1rem; }
+.compat-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.compat-table th, .compat-table td {
+  padding: .7rem .9rem .7rem 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.compat-table th {
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.compat-table td { color: var(--muted); }
+.compat-table td:first-child { color: var(--text); white-space: nowrap; }
+.compat-table code { color: var(--accent); font-size: .78rem; }
+.compat-table a { color: var(--accent); }
+
+@media (max-width: 820px) {
+  .compat-baseline { grid-template-columns: 1fr; }
+  .compat-head { display: none; }
+}
+
 @media (max-width: 820px) {
   .site-header nav a:first-child { display: none; }
   .fact-strip { grid-template-columns: 1fr 1fr; }

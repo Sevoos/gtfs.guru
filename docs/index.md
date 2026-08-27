@@ -4,6 +4,8 @@
 
 Closely compatible with [MobilityData gtfs-validator](https://github.com/MobilityData/gtfs-validator) (Java), with the same report shape and familiar notice codes. The rule sets are not identical.
 
+Which GTFS specification revision and which canonical validator release this version answers for, what changed upstream recently, and how every notice code maps to a canonical rule: see the [compatibility page](https://gtfs.guru/compatibility/).
+
 ## Why GTFS.Guru?
 
 | Feature | Java Validator | GTFS.Guru |

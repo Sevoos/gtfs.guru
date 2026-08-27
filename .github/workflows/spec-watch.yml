@@ -28,7 +28,9 @@ on:
       - "scripts/spec_watch_test.py"
       - "scripts/spec_watch_fixtures/**"
       - "crates/gtfs_validator_core/spec_baseline.json"
+      - "crates/gtfs_validator_core/spec_changes.json"
       - "crates/gtfs_validator_core/src/spec_baseline.rs"
+      - "crates/gtfs_validator_core/src/spec_changes.rs"
       - "crates/gtfs_validator_core/src/spec_surface.rs"
       - ".github/workflows/spec-watch.yml"
       - "docs/spec-watch.md"
@@ -38,7 +40,9 @@ on:
       - "scripts/spec_watch_test.py"
       - "scripts/spec_watch_fixtures/**"
       - "crates/gtfs_validator_core/spec_baseline.json"
+      - "crates/gtfs_validator_core/spec_changes.json"
       - "crates/gtfs_validator_core/src/spec_baseline.rs"
+      - "crates/gtfs_validator_core/src/spec_changes.rs"
       - "crates/gtfs_validator_core/src/spec_surface.rs"
       - ".github/workflows/spec-watch.yml"
       - "docs/spec-watch.md"
@@ -64,6 +68,37 @@ jobs:
       # going quiet in the weekly run.
       - name: Watcher detection tests
         run: python3 scripts/spec_watch_test.py
+
+  coordination:
+    name: Baseline coordination
+    # Pull requests only: this compares the branch against its merge base, which
+    # is what a push to main no longer has. Offline, so an upstream outage cannot
+    # turn it red.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # The merge base has to be in the clone for `git show` to reach it.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # A baseline move is a new public claim about what this build supports, so
+      # the curated change log the compatibility page is generated from has to
+      # move with it.
+      # The base SHA rather than `origin/<branch>`: actions/checkout builds the
+      # PR's merge ref, so a remote-tracking branch for the base is not
+      # something to rely on. The SHA is always in the payload, and
+      # fetch-depth: 0 guarantees the object is present.
+      - name: The change log moved with the baseline
+        run: |
+          python3 scripts/spec_watch.py check-coordination \
+            --base-ref "${{ github.event.pull_request.base.sha }}"
 
   watch:
     name: Upstream drift

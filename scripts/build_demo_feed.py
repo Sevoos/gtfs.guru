@@ -148,12 +148,16 @@ Do not use this feed for anything other than trying out a validator.
 
 def build_archive() -> bytes:
     buffer = BytesIO()
-    # No compression metadata varies between runs, and ZIP_DEFLATED output is
-    # stable for a given zlib level, so the archive hashes the same every time.
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+    # Stored, not deflated. `--check` compares bytes, and deflate output is only
+    # stable for a given zlib *implementation*: a machine whose Python links
+    # zlib-ng produces a different compressed stream from the same input, so the
+    # committed archive looked stale locally and a rebuild there produced a diff
+    # CI then rejected. Storing the members makes the archive byte-reproducible
+    # everywhere, and a few kilobytes of CSV has nothing worth compressing.
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
         for name in sorted(FILES):
             info = zipfile.ZipInfo(name, date_time=FIXED_DATE_TIME)
-            info.compress_type = zipfile.ZIP_DEFLATED
+            info.compress_type = zipfile.ZIP_STORED
             info.external_attr = 0o644 << 16
             archive.writestr(info, FILES[name])
     return buffer.getvalue()

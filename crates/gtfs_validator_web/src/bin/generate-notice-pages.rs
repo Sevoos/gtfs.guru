@@ -11,6 +11,9 @@ use gtfs_guru_core::build_notice_schema_map;
 use gtfs_guru_core::notice_schema::{
     FieldTypeSchema, NoticeSchema, NoticeSchemaSeverity, ReferencesSchema,
 };
+use gtfs_guru_core::spec_baseline::{spec_baseline, CanonicalBaseline, SpecBaseline};
+use gtfs_guru_core::spec_changes::{spec_changes, SpecChangeEntry, SpecChanges};
+use gtfs_guru_core::spec_surface::{spec_surface, SpecSurface};
 use serde::Deserialize;
 
 const BASE_URL: &str = "https://gtfs.guru";
@@ -122,6 +125,32 @@ fn generate(check: bool) -> anyhow::Result<()> {
         )?;
     }
 
+    let surface = spec_surface();
+    let compatibility_dir = root.join("compatibility");
+    if !check {
+        fs::create_dir_all(&compatibility_dir)
+            .with_context(|| format!("create {}", compatibility_dir.display()))?;
+    }
+    // The page states what this build supports, so a missing or unparsable
+    // baseline has to stop the generator rather than publish a page that quietly
+    // says "unknown".
+    let baseline = spec_baseline().context("the committed spec baseline must parse")?;
+    let changes = spec_changes().context("the committed spec changes must parse")?;
+    let problems = gtfs_guru_core::validate_spec_changes(changes, &surface, baseline);
+    if !problems.is_empty() {
+        bail!(
+            "spec_changes.json disagrees with this build, so the compatibility page would \
+             publish a false claim:\n  {}",
+            problems.join("\n  ")
+        );
+    }
+    check_or_write(
+        &compatibility_dir.join("index.html"),
+        &render_compatibility_page(&schemas, &surface, baseline, changes),
+        check,
+        &mut changed,
+    )?;
+
     let expected_codes: BTreeSet<&str> = schemas.keys().map(String::as_str).collect();
     if notices_dir.is_dir() {
         for entry in
@@ -192,7 +221,10 @@ fn render_rules_markdown(schemas: &BTreeMap<String, NoticeSchema>) -> String {
          machine-readable schema, including context fields for every code:\n\n\
          ```bash\n\
          gtfs-guru --export-notices-schema --output_base ./out\n\
-         ```\n",
+         ```\n\n\
+         Which specification revision and canonical validator release these codes are\n\
+         aligned with, which of them correspond to a canonical rule, and what changed\n\
+         upstream recently: see [the compatibility page](https://gtfs.guru/compatibility/).\n",
         schemas.len()
     );
 
@@ -332,6 +364,7 @@ fn render_notice_page(
     <nav aria-label="Primary navigation">
       <a href="/#validator">Validator</a>
       <a href="/notices/" aria-current="page">Notice codes</a>
+      <a href="/compatibility/">Compatibility</a>
       <a href="https://github.com/abasis-ltd/gtfs.guru">GitHub</a>
     </nav>
   </header>
@@ -682,6 +715,7 @@ fn render_index(schemas: &BTreeMap<String, NoticeSchema>) -> String {
     <nav aria-label="Primary navigation">
       <a href="/#validator">Validator</a>
       <a href="/notices/" aria-current="page">Notice codes</a>
+      <a href="/compatibility/">Compatibility</a>
       <a href="https://github.com/abasis-ltd/gtfs.guru">GitHub</a>
     </nav>
   </header>
@@ -753,6 +787,10 @@ fn render_sitemap(root: &Path, schemas: &BTreeMap<String, NoticeSchema>) -> anyh
     urls.insert(
         format!("{BASE_URL}/notices/"),
         root.join("notices/index.html"),
+    );
+    urls.insert(
+        format!("{BASE_URL}/compatibility/"),
+        root.join("compatibility/index.html"),
     );
     for code in schemas.keys() {
         urls.insert(
@@ -1041,10 +1079,36 @@ fn render_inline(value: &str) -> String {
         if in_code {
             write!(out, "<code>{}</code>", escape_html(part)).expect("write to string");
         } else {
-            out.push_str(&escape_html(part));
+            out.push_str(&render_bold(&escape_html(part)));
         }
         in_code = !in_code;
     }
+    out
+}
+
+/// `**bold**` outside code spans, for prose that quotes the specification's own
+/// emphasis (**Required**, **Conditionally Required**). Runs on already-escaped
+/// text, which cannot contain an asterisk that is not a literal one.
+fn render_bold(escaped: &str) -> String {
+    let mut out = String::new();
+    let mut rest = escaped;
+    while let Some(open) = rest.find("**") {
+        let after_open = &rest[open + 2..];
+        let Some(close) = after_open.find("**") else {
+            break;
+        };
+        // `****` carries no text to emphasise; leave it alone rather than
+        // emitting an empty element.
+        if close == 0 {
+            out.push_str(&rest[..open + 2]);
+            rest = after_open;
+            continue;
+        }
+        out.push_str(&rest[..open]);
+        write!(out, "<strong>{}</strong>", &after_open[..close]).expect("write to string");
+        rest = &after_open[close + 2..];
+    }
+    out.push_str(rest);
     out
 }
 
@@ -1069,6 +1133,601 @@ fn escape_html(value: &str) -> String {
 
 fn escape_xml(value: &str) -> String {
     escape_html(value)
+}
+
+/// The public answer to "which GTFS does this build support?".
+///
+/// Every number and every claim here is read from the same data validation uses
+/// — the baseline, the curated change log, and the spec surface — so the page
+/// cannot drift from the binary without `--check` or `cargo test` failing.
+fn render_compatibility_page(
+    schemas: &BTreeMap<String, NoticeSchema>,
+    surface: &SpecSurface,
+    baseline: &SpecBaseline,
+    changes: &SpecChanges,
+) -> String {
+    let spec = &baseline.spec_revision;
+    let canonical = &baseline.canonical_baseline;
+    let spec_short = &spec.commit[..8.min(spec.commit.len())];
+    let spec_url = format!(
+        "https://github.com/{}/blob/{}/gtfs/spec/en/reference.md",
+        spec.repository, spec.commit
+    );
+    let canonical_url = format!(
+        "https://github.com/{}/releases/tag/{}",
+        canonical.repository, canonical.version
+    );
+
+    let description = format!(
+        "GTFS Guru {} validates against the GTFS reference at {}@{} and the canonical \
+         MobilityData validator {}. See every notice code, its canonical counterpart, and \
+         what changed upstream.",
+        surface.validator_version, spec.repository, spec_short, canonical.version
+    );
+
+    let field_count: usize = surface.files.values().map(|file| file.fields.len()).sum();
+    let enum_count: usize = surface.files.values().map(|file| file.enums.len()).sum();
+
+    let json_ld = serde_json::json!({
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "name": "GTFS specification and validator compatibility",
+        "description": description,
+        "url": format!("{BASE_URL}/compatibility/"),
+        "isPartOf": {
+            "@type": "WebSite",
+            "name": "GTFS Guru",
+            "url": format!("{BASE_URL}/")
+        },
+        "dateModified": baseline.updated_at,
+        "about": [
+            {"@type": "Thing", "name": "GTFS", "url": spec_url},
+            {"@type": "SoftwareApplication", "name": "MobilityData gtfs-validator", "url": canonical_url}
+        ]
+    });
+
+    format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GTFS specification and validator compatibility — GTFS Guru</title>
+  <meta name="description" content="{meta_description}">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="{BASE_URL}/compatibility/">
+  <link rel="sitemap" type="application/xml" href="{BASE_URL}/sitemap.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="GTFS Guru">
+  <meta property="og:title" content="GTFS specification and validator compatibility">
+  <meta property="og:description" content="{meta_description}">
+  <meta property="og:url" content="{BASE_URL}/compatibility/">
+  <meta property="og:image" content="{BASE_URL}/og-image.png">
+  <meta name="theme-color" content="#07111f">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+  <link rel="stylesheet" href="/notices/notice.css">
+  <script type="application/ld+json">{json_ld}</script>
+  <script src="/notices/notice.js" defer></script>
+</head>
+<body>
+{GENERATED_MARKER}
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="GTFS Guru home">GTFS<span>.guru</span></a>
+    <nav aria-label="Primary navigation">
+      <a href="/#validator">Validator</a>
+      <a href="/notices/">Notice codes</a>
+      <a href="/compatibility/" aria-current="page">Compatibility</a>
+      <a href="https://github.com/abasis-ltd/gtfs.guru">GitHub</a>
+    </nav>
+  </header>
+  <main class="compat">
+    <div class="breadcrumbs"><a href="/">Home</a><span>/</span><span>Compatibility</span></div>
+    <section class="index-intro">
+      <p class="section-kicker">Version {validator_version}</p>
+      <h1>What GTFS Guru<br>supports today.</h1>
+      <p>This release validates against one specific revision of the GTFS reference and one
+         specific release of the canonical MobilityData validator. Both are named below, and
+         every difference from them is listed rather than left implicit.</p>
+    </section>
+
+    <section class="compat-baseline" aria-label="Supported upstream state">
+      <div class="baseline-card">
+        <p class="baseline-label">GTFS specification revision</p>
+        <p class="baseline-value"><a href="{spec_url}"><code>{spec_repository}@{spec_short}</code></a></p>
+        <p class="baseline-meta">Reference committed {spec_date}</p>
+      </div>
+      <div class="baseline-card">
+        <p class="baseline-label">Canonical validator baseline</p>
+        <p class="baseline-value"><a href="{canonical_url}"><code>{canonical_repository}@{canonical_version}</code></a></p>
+        <p class="baseline-meta">Released {canonical_date}</p>
+      </div>
+      <div class="baseline-card">
+        <p class="baseline-label">Validation surface</p>
+        <p class="baseline-value"><code>{files} files &middot; {fields} fields</code></p>
+        <p class="baseline-meta">{enums} enum domains &middot; {notices} notice codes</p>
+      </div>
+    </section>
+
+    <section class="compat-section">
+      <h2 id="baseline">What &ldquo;baseline&rdquo; means</h2>
+      <p>The <strong>specification revision</strong> is the exact commit of
+         <code>gtfs/spec/en/reference.md</code> whose files, fields, and enum values this
+         build was checked against. The <strong>canonical baseline</strong> is the
+         MobilityData validator release whose published rule set this build's notice codes
+         were compared against.</p>
+      <p>Together they are what GTFS Guru answers for: any difference from them is either
+         implemented, or listed on this page as an accepted difference. A weekly job compares
+         both upstreams against this build and reports anything new, so this page going stale
+         is a build failure rather than an oversight. Every JSON report carries the same two
+         identifiers in its <code>summary</code>, so a stored report says which upstream state
+         produced it.</p>
+    </section>
+
+    <section class="compat-section">
+      <h2 id="whats-new">What&rsquo;s new since {since_version}</h2>
+      <p>Upstream additions dated after GTFS Guru {since_version} ({since_date}), with the
+         support status of each. Differences that are not fully supported are listed further
+         down regardless of age, so an open gap never ages off this page.</p>
+{whats_new}
+    </section>
+
+    <section class="compat-section">
+      <h2 id="notices">Notice codes and canonical rules</h2>
+      <p>All {notices} codes this build can emit. Codes the canonical validator also publishes
+         link to its rule; the rest are GTFS Guru additions or codes the canonical validator
+         has since deprecated. Search matches the code, its summary, and its correspondence.</p>
+      <div class="index-controls">
+        <label><span>Search notice codes</span><input id="notice-search" type="search" placeholder="Try canonical, guru only, or a code" autocomplete="off"></label>
+        <div class="severity-filters" aria-label="Filter by severity">
+          <button class="active" type="button" data-filter="all">All <span>{notices}</span></button>
+          <button type="button" data-filter="error">Errors <span>{errors}</span></button>
+          <button type="button" data-filter="warning">Warnings <span>{warnings}</span></button>
+          <button type="button" data-filter="info">Info <span>{infos}</span></button>
+        </div>
+      </div>
+      <div class="notice-directory" aria-label="Notice code correspondence">
+        <div class="directory-head compat-head"><span>Severity</span><span>Notice</span><span>Canonical rule</span></div>
+{notice_rows}
+        <p id="no-results" hidden>No notice codes match this search.</p>
+      </div>
+      <p class="compat-note">{canonical_coverage}</p>
+    </section>
+
+    <section class="compat-section">
+      <h2 id="deprecated">Deprecated by the canonical validator</h2>
+      <p>Codes the canonical validator has retired. GTFS Guru still reports the ones marked as
+         emitted, so a report may carry both a deprecated code and its replacement.</p>
+{deprecated}
+    </section>
+
+    <section class="compat-section">
+      <h2 id="differences">Accepted differences</h2>
+      <p>Deliberate, reviewed departures from the two upstreams above. Each one is recorded in
+         version control; the build fails if this list and the recorded set disagree.</p>
+{differences}
+    </section>
+
+    <section class="compat-section">
+      <h2 id="coverage">Coverage by file</h2>
+      <p>Every file this build models, with the number of columns it reads, the columns it
+         requires, and the columns whose values are checked against an enumerated domain.</p>
+      <div class="table-scroll">
+        <table class="compat-table">
+          <thead><tr><th scope="col">File</th><th scope="col">Columns</th><th scope="col">Required</th><th scope="col">Enum domains</th></tr></thead>
+          <tbody>
+{coverage}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="compat-section">
+      <h2 id="generated">How this page is generated</h2>
+      <p>Nothing here is written by hand twice. The revisions come from the baseline document
+         in the repository, the counts and the notice list come from the same tables the
+         validator uses, and the support statuses come from a reviewed change log next to
+         them. Reproduce the machine-readable form yourself:</p>
+      <pre><code>gtfs-guru spec-surface</code></pre>
+      <p>The baseline was last moved on {baseline_updated}. Sources:
+         <a href="{spec_url}">the GTFS reference at this revision</a>,
+         <a href="{canonical_url}">the canonical validator release</a>, and
+         <a href="{MOBILITYDATA_RULES_URL}">its published rule list</a>.</p>
+    </section>
+  </main>
+  <footer>
+    <div><a class="brand" href="/">GTFS<span>.guru</span></a><p>Fast, private GTFS validation.</p></div>
+    <div><a href="/#validator">Validate a feed</a><a href="/notices/">Notice codes</a><a href="https://github.com/abasis-ltd/gtfs.guru">Source code</a></div>
+  </footer>
+</body>
+</html>
+"##,
+        meta_description = escape_html(&truncate_meta(&description)),
+        json_ld = json_ld,
+        validator_version = escape_html(&surface.validator_version),
+        spec_repository = escape_html(&spec.repository),
+        spec_short = escape_html(spec_short),
+        spec_date = escape_html(&spec.committed_at[..10.min(spec.committed_at.len())]),
+        spec_url = escape_html(&spec_url),
+        canonical_repository = escape_html(&canonical.repository),
+        canonical_version = escape_html(&canonical.version),
+        canonical_date =
+            escape_html(&canonical.published_at[..10.min(canonical.published_at.len())]),
+        canonical_url = escape_html(&canonical_url),
+        files = surface.files.len(),
+        fields = field_count,
+        enums = enum_count,
+        notices = schemas.len(),
+        since_version = escape_html(&changes.window.since_version),
+        since_date = escape_html(&changes.window.since_date),
+        whats_new = render_whats_new(changes, canonical),
+        notice_rows = render_correspondence_rows(schemas, baseline),
+        canonical_coverage = render_canonical_coverage(baseline),
+        errors = schemas
+            .values()
+            .filter(|schema| matches!(schema.severity_level, NoticeSchemaSeverity::Error))
+            .count(),
+        warnings = schemas
+            .values()
+            .filter(|schema| matches!(schema.severity_level, NoticeSchemaSeverity::Warning))
+            .count(),
+        infos = schemas
+            .values()
+            .filter(|schema| matches!(schema.severity_level, NoticeSchemaSeverity::Info))
+            .count(),
+        deprecated = render_deprecated(schemas, surface),
+        differences = render_accepted_differences(changes),
+        coverage = render_coverage(surface),
+        baseline_updated = escape_html(&baseline.updated_at[..10.min(baseline.updated_at.len())]),
+    )
+}
+
+/// One card per upstream change inside the window, plus an explicit statement
+/// when an upstream produced nothing — silence on this page has to be readable
+/// as "nothing changed", not as "we forgot to look".
+fn render_whats_new(changes: &SpecChanges, canonical: &CanonicalBaseline) -> String {
+    let mut output = String::new();
+    let entries = changes.in_window();
+
+    if entries.is_empty() {
+        output.push_str(
+            "    <p class=\"compat-empty\">No upstream additions landed in this window.</p>\n",
+        );
+    } else {
+        output.push_str("    <div class=\"change-list\">\n");
+        for entry in &entries {
+            write!(output, "{}", render_change_card(entry)).expect("write to string");
+        }
+        output.push_str("    </div>\n");
+    }
+
+    // The canonical side is a release feed rather than a commit stream, so its
+    // "nothing new" case is worth stating from the baseline itself.
+    let canonical_date = &canonical.published_at[..10.min(canonical.published_at.len())];
+    if canonical_date <= changes.window.since_date.as_str() {
+        writeln!(
+            output,
+            "    <p class=\"compat-note\">The canonical validator has published no release \
+             since <code>{}</code> on {}, so its rule set is unchanged in this window.</p>",
+            escape_html(&canonical.version),
+            escape_html(canonical_date),
+        )
+        .expect("write to string");
+    }
+    output
+}
+
+fn render_change_card(entry: &SpecChangeEntry) -> String {
+    let mut badges = format!(
+        r#"<span class="status {}">{}</span>"#,
+        entry.status.slug(),
+        escape_html(entry.status.label())
+    );
+    if let Some(flag) = entry.requires.as_deref() {
+        write!(
+            badges,
+            r#"<span class="status flag">Needs <code>{}</code></span>"#,
+            escape_html(flag)
+        )
+        .expect("write to string");
+    }
+    if let Some(version) = entry.guru_version.as_deref() {
+        write!(
+            badges,
+            r#"<span class="status version">Since {}</span>"#,
+            escape_html(version)
+        )
+        .expect("write to string");
+    }
+
+    let notices = if entry.notices.is_empty() {
+        String::new()
+    } else {
+        let links = entry
+            .notices
+            .iter()
+            .map(|code| {
+                format!(
+                    r#"<a href="/notices/{code}/"><code>{code}</code></a>"#,
+                    code = escape_html(code)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("      <p class=\"change-notices\">Reported as {links}</p>\n")
+    };
+
+    format!(
+        r#"      <article class="change-card">
+        <div class="change-head"><p class="change-id"><code>{id}</code></p><div class="change-badges">{badges}</div></div>
+        <p class="change-title">{title}</p>
+        <p class="change-summary">{summary}</p>
+{notices}        <p class="change-source">Upstream: <a href="{url}">{reference}</a>{date}</p>
+      </article>
+"#,
+        id = escape_html(&entry.id),
+        badges = badges,
+        title = escape_html(&entry.title),
+        summary = render_inline(&entry.summary),
+        notices = notices,
+        url = escape_html(&entry.upstream.url),
+        reference = escape_html(&entry.upstream.reference),
+        date = entry
+            .upstream
+            .date
+            .as_deref()
+            .map(|date| format!(", {}", escape_html(date)))
+            .unwrap_or_default(),
+    )
+}
+
+/// The correspondence table: one row per code this build can emit.
+fn render_correspondence_rows(
+    schemas: &BTreeMap<String, NoticeSchema>,
+    baseline: &SpecBaseline,
+) -> String {
+    let guru_only: BTreeSet<&str> = baseline
+        .acknowledged
+        .notices_not_in_canonical
+        .iter()
+        .map(String::as_str)
+        .collect();
+
+    let mut rows = String::new();
+    for (code, schema) in schemas {
+        let severity = severity_label(schema.severity_level);
+        let display_summary = schema
+            .short_summary
+            .as_deref()
+            .unwrap_or(code)
+            .replace('`', "");
+
+        // Deprecation is the more specific fact: a retired canonical code is
+        // absent from the current rule list, which would otherwise read as a
+        // GTFS Guru invention.
+        let (correspondence, keywords, cell) = if schema.deprecated {
+            (
+                "deprecated",
+                "deprecated upstream",
+                format!(
+                    r#"<span class="badge deprecated">Deprecated{}</span>"#,
+                    schema
+                        .deprecation_version
+                        .as_deref()
+                        .map(|version| format!(" in {}", escape_html(version)))
+                        .unwrap_or_default()
+                ),
+            )
+        } else if guru_only.contains(code.as_str()) {
+            (
+                "guru",
+                "gtfs guru only",
+                r#"<span class="badge guru">GTFS Guru only</span>"#.to_string(),
+            )
+        } else {
+            (
+                "canonical",
+                "canonical",
+                format!(
+                    r#"<a href="{MOBILITYDATA_RULES_URL}#{code}-rule">Canonical rule</a>"#,
+                    code = escape_html(code)
+                ),
+            )
+        };
+
+        write!(
+            rows,
+            r#"        <a class="notice-row compat-row" href="/notices/{code}/" data-code="{code}" data-severity="{severity_slug}" data-correspondence="{correspondence}" data-search="{code} {summary} {keywords}">
+          <span class="severity {severity_slug}">{severity}</span>
+          <span><code>{code}</code><strong>{summary}</strong></span>
+          <span>{cell}</span>
+        </a>
+"#,
+            code = escape_html(code),
+            severity_slug = severity.to_ascii_lowercase(),
+            severity = severity,
+            correspondence = correspondence,
+            summary = escape_html(&display_summary),
+            keywords = keywords,
+            cell = cell,
+        )
+        .expect("write to string");
+    }
+    rows
+}
+
+/// The claim that matters most on this page, so it is stated in words rather
+/// than left for the reader to infer from a table of 191 rows.
+fn render_canonical_coverage(baseline: &SpecBaseline) -> String {
+    let missing = &baseline.acknowledged.canonical_notices_not_implemented;
+    if missing.is_empty() {
+        format!(
+            "Every rule the canonical validator publishes in {} is implemented here: the \
+             list of canonical rules with no GTFS Guru equivalent is empty.",
+            escape_html(&baseline.canonical_baseline.version)
+        )
+    } else {
+        let codes = missing
+            .iter()
+            .map(|code| format!("<code>{}</code>", escape_html(code)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "{} canonical rule(s) are not implemented here: {codes}.",
+            missing.len()
+        )
+    }
+}
+
+fn render_deprecated(schemas: &BTreeMap<String, NoticeSchema>, surface: &SpecSurface) -> String {
+    let mut rows = String::new();
+    for (code, schema) in schemas.iter().filter(|(_, schema)| schema.deprecated) {
+        let replacements = match schema.replacement_notice_codes.as_deref() {
+            None | Some([]) => "&mdash;".to_string(),
+            Some(codes) => codes
+                .iter()
+                .map(|replacement| {
+                    if surface.notices.contains_key(replacement) {
+                        format!(
+                            r#"<a href="/notices/{code}/"><code>{code}</code></a>"#,
+                            code = escape_html(replacement)
+                        )
+                    } else {
+                        format!("<code>{}</code>", escape_html(replacement))
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", "),
+        };
+        write!(
+            rows,
+            r#"              <tr>
+                <td><a href="/notices/{code}/"><code>{code}</code></a></td>
+                <td>{version}</td>
+                <td>{reason}</td>
+                <td>{replacements}</td>
+                <td>{emitted}</td>
+              </tr>
+"#,
+            code = escape_html(code),
+            version = escape_html(schema.deprecation_version.as_deref().unwrap_or("—")),
+            reason = render_inline(schema.deprecation_reason.as_deref().unwrap_or("—")),
+            replacements = replacements,
+            emitted = if surface.notices.contains_key(code.as_str()) {
+                "Still reported"
+            } else {
+                "Not reported"
+            },
+        )
+        .expect("write to string");
+    }
+
+    if rows.is_empty() {
+        return "    <p class=\"compat-empty\">The canonical validator has deprecated no code \
+                in this baseline.</p>\n"
+            .to_string();
+    }
+
+    format!(
+        r#"    <div class="table-scroll">
+      <table class="compat-table">
+        <thead><tr><th scope="col">Notice</th><th scope="col">Deprecated in</th><th scope="col">Reason</th><th scope="col">Replaced by</th><th scope="col">In GTFS Guru</th></tr></thead>
+          <tbody>
+{rows}          </tbody>
+      </table>
+    </div>
+"#
+    )
+}
+
+/// Accepted differences, grouped under the watcher's own category names so the
+/// page and the repository use one vocabulary.
+fn render_accepted_differences(changes: &SpecChanges) -> String {
+    let grouped = changes.accepted_differences();
+    if grouped.is_empty() {
+        return "    <p class=\"compat-empty\">This build has no accepted differences from \
+                either upstream.</p>\n"
+            .to_string();
+    }
+
+    let mut output = String::new();
+    for (category, entries) in grouped {
+        write!(
+            output,
+            "    <h3>{} <span class=\"count\">{}</span></h3>\n    <p class=\"category-blurb\">{}</p>\n    <div class=\"change-list\">\n",
+            escape_html(difference_heading(category)),
+            entries.len(),
+            escape_html(difference_blurb(category)),
+        )
+        .expect("write to string");
+        for entry in entries {
+            write!(output, "{}", render_change_card(entry)).expect("write to string");
+        }
+        output.push_str("    </div>\n");
+    }
+    output
+}
+
+fn difference_heading(category: &str) -> &'static str {
+    match category {
+        "specFilesNotSupported" => "Files in the reference this build does not model",
+        "specFieldsNotSupported" => "Columns in the reference this build does not read",
+        "fieldsNotInSpec" => "Columns accepted beyond the reference",
+        "requiredMismatches" => "Columns the reference requires and this build does not",
+        "enumValuesNotSupported" => "Enum values in the reference this build rejects",
+        "enumValuesNotInSpec" => "Enum values accepted beyond the reference",
+        "canonicalNoticesNotImplemented" => "Canonical rules not implemented",
+        "noticesNotInCanonical" => "Notice codes with no canonical rule",
+        _ => "Other differences",
+    }
+}
+
+fn difference_blurb(category: &str) -> &'static str {
+    match category {
+        "fieldsNotInSpec" => {
+            "These columns are read rather than reported as unknown, so a producer carrying \
+             them is not told the column is a mistake."
+        }
+        "requiredMismatches" => {
+            "The reference marks these columns Required. This build does not fail a feed that \
+             leaves them empty, for the reason given on each."
+        }
+        "noticesNotInCanonical" => {
+            "Checks GTFS Guru adds, and codes the canonical validator has retired but this \
+             build still reports."
+        }
+        "canonicalNoticesNotImplemented" => {
+            "Rules the canonical validator publishes that this build does not yet emit."
+        }
+        _ => "Differences recorded in the baseline as intended.",
+    }
+}
+
+fn render_coverage(surface: &SpecSurface) -> String {
+    let mut rows = String::new();
+    for (name, file) in &surface.files {
+        // `locations.geojson` has no column schema, and reporting it as a file
+        // with zero columns would read as a gap rather than a different shape.
+        let (fields, required, enums) = if file.has_field_schema {
+            (
+                file.fields.len().to_string(),
+                file.required_fields.len().to_string(),
+                file.enums.len().to_string(),
+            )
+        } else {
+            (
+                "not tabular".to_string(),
+                "&mdash;".to_string(),
+                "&mdash;".to_string(),
+            )
+        };
+        writeln!(
+            rows,
+            "            <tr><td><code>{name}</code></td><td>{fields}</td><td>{required}</td><td>{enums}</td></tr>",
+            name = escape_html(name),
+        )
+        .expect("write to string");
+    }
+    rows
 }
 
 #[cfg(test)]

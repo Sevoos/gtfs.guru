@@ -7,6 +7,7 @@
 //! deliberate act of accepting a new upstream state; `docs/spec-watch.md`
 //! describes the protocol.
 
+use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
@@ -36,14 +37,45 @@ pub struct CanonicalBaseline {
     pub rules_asset: String,
 }
 
-/// Only the fields the validator itself needs; the watcher's `acknowledged`
-/// bookkeeping lives in the same file but is of no interest to a build.
+/// The upstream differences this baseline consciously accepts.
+///
+/// `scripts/spec_watch.py` owns the contents: a run reports only differences
+/// this block does not already list. The compatibility page reads it so every
+/// accepted difference is stated publicly rather than only in the repository.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct Acknowledged {
+    #[serde(rename = "specFilesNotSupported", default)]
+    pub spec_files_not_supported: Vec<String>,
+    #[serde(rename = "specFieldsNotSupported", default)]
+    pub spec_fields_not_supported: BTreeMap<String, Vec<String>>,
+    #[serde(rename = "fieldsNotInSpec", default)]
+    pub fields_not_in_spec: BTreeMap<String, Vec<String>>,
+    #[serde(rename = "requiredMismatches", default)]
+    pub required_mismatches: BTreeMap<String, Vec<String>>,
+    #[serde(rename = "enumValuesNotSupported", default)]
+    pub enum_values_not_supported: BTreeMap<String, Vec<String>>,
+    #[serde(rename = "enumValuesNotInSpec", default)]
+    pub enum_values_not_in_spec: BTreeMap<String, Vec<String>>,
+    #[serde(rename = "canonicalNoticesNotImplemented", default)]
+    pub canonical_notices_not_implemented: Vec<String>,
+    #[serde(rename = "noticesNotInCanonical", default)]
+    pub notices_not_in_canonical: Vec<String>,
+}
+
+/// The baseline document. Reports need only the two revision objects; the
+/// compatibility page also reads the accepted differences and the date.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SpecBaseline {
     #[serde(rename = "specRevision")]
     pub spec_revision: SpecRevision,
     #[serde(rename = "canonicalBaseline")]
     pub canonical_baseline: CanonicalBaseline,
+    /// Defaulted rather than required: a document without the watcher's
+    /// bookkeeping still has to yield the two identifiers reports quote.
+    #[serde(default)]
+    pub acknowledged: Acknowledged,
+    #[serde(rename = "updatedAt", default)]
+    pub updated_at: String,
 }
 
 /// The baseline, or `None` if the bundled document does not parse.

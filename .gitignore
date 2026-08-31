@@ -54,3 +54,4 @@ crates/gtfs_validator_gui/gen/schemas/linux-schema.json
 
 # mkdocs build output
 /site/
+opencode.json

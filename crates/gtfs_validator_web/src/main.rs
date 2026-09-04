@@ -61,6 +61,18 @@ const DEFAULT_MAX_CONCURRENT_UPLOADS: usize = 4;
 /// Overridable via `GTFS_VALIDATOR_WEB_PROCESSING_TIMEOUT_SECONDS`.
 const DEFAULT_PROCESSING_TIMEOUT_SECS: u128 = 30 * 60;
 
+/// How long an upload may stall between body chunks before it is abandoned.
+/// Overridable via `GTFS_VALIDATOR_WEB_UPLOAD_IDLE_TIMEOUT_SECONDS`. A client
+/// that opens `PUT /upload/:id` and never finishes the body would otherwise
+/// hold its upload and admission permits forever: cleanup can drop the job from
+/// the map, but it cannot release a permit owned by a live handler.
+const DEFAULT_UPLOAD_IDLE_TIMEOUT_SECS: u64 = 60;
+
+/// Ceiling on the whole upload, so a client that trickles one byte per idle
+/// window cannot hold a permit indefinitely either. Overridable via
+/// `GTFS_VALIDATOR_WEB_UPLOAD_TIMEOUT_SECONDS`.
+const DEFAULT_UPLOAD_TIMEOUT_SECS: u64 = 30 * 60;
+
 /// Global create-job requests accepted per minute.
 const DEFAULT_MAX_CREATE_JOB_REQUESTS_PER_MINUTE: usize = 60;
 
@@ -188,6 +200,8 @@ struct AppState {
     job_create_rate_limiter: Arc<ProxyRateLimiter>,
     pubsub_token: Option<String>,
     processing_timeout_ms: u128,
+    upload_idle_timeout: Duration,
+    upload_timeout: Duration,
 }
 
 impl AppState {
@@ -213,6 +227,8 @@ impl AppState {
             )),
             pubsub_token: load_pubsub_token(),
             processing_timeout_ms: load_processing_timeout_ms(),
+            upload_idle_timeout: load_upload_idle_timeout(),
+            upload_timeout: load_upload_timeout(),
         }
     }
 }
@@ -274,6 +290,32 @@ fn load_processing_timeout_ms() -> u128 {
             .unwrap_or(default_ms),
         Err(_) => default_ms,
     }
+}
+
+fn load_upload_idle_timeout() -> Duration {
+    load_timeout_secs(
+        "GTFS_VALIDATOR_WEB_UPLOAD_IDLE_TIMEOUT_SECONDS",
+        DEFAULT_UPLOAD_IDLE_TIMEOUT_SECS,
+    )
+}
+
+fn load_upload_timeout() -> Duration {
+    load_timeout_secs(
+        "GTFS_VALIDATOR_WEB_UPLOAD_TIMEOUT_SECONDS",
+        DEFAULT_UPLOAD_TIMEOUT_SECS,
+    )
+}
+
+/// Read a positive timeout in seconds. Unset, unparsable or zero all fall back
+/// to the default: an upload without any deadline is what leaks the permit, so
+/// there is deliberately no way to turn these off.
+fn load_timeout_secs(name: &str, default_secs: u64) -> Duration {
+    let seconds = std::env::var(name)
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default_secs);
+    Duration::from_secs(seconds)
 }
 
 fn load_max_proxy_bytes() -> usize {
@@ -647,7 +689,15 @@ async fn upload_job(
     }
     let input_path = job_dir.join("input.zip");
     let max_upload_bytes = state.max_upload_bytes;
-    match stream_body_to_file(request.into_body(), &input_path, max_upload_bytes).await {
+    match stream_body_to_file(
+        request.into_body(),
+        &input_path,
+        max_upload_bytes,
+        state.upload_idle_timeout,
+        state.upload_timeout,
+    )
+    .await
+    {
         Ok(()) => {}
         Err(StreamBodyError::TooLarge) => {
             drop(upload_permit);
@@ -659,6 +709,17 @@ async fn upload_job(
                 Some("upload exceeds the configured size limit".to_string()),
             );
             return StatusCode::PAYLOAD_TOO_LARGE;
+        }
+        Err(StreamBodyError::Timeout) => {
+            drop(upload_permit);
+            drop(admission);
+            update_job_status(
+                &state,
+                &job_id,
+                JobStatus::Error,
+                Some("upload timed out".to_string()),
+            );
+            return StatusCode::REQUEST_TIMEOUT;
         }
         Err(StreamBodyError::Io) => {
             drop(upload_permit);
@@ -870,37 +931,70 @@ fn spawn_job_processing_admitted(
     });
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum StreamBodyError {
     TooLarge,
     Io,
+    /// The client stopped sending, or kept sending for too long. Distinct from
+    /// `Io` because it is the deadline, not the peer, that ended the upload.
+    Timeout,
 }
 
+/// Stream a request body to `path`, bounded in size *and* in time.
+///
+/// Both deadlines exist so the handler always returns: it owns the upload and
+/// admission permits, and nothing else can release them. `idle_timeout` bounds
+/// the wait for the next chunk, `total_timeout` the whole transfer.
 async fn stream_body_to_file(
     body: Body,
     path: &Path,
     max_bytes: usize,
+    idle_timeout: Duration,
+    total_timeout: Duration,
 ) -> Result<(), StreamBodyError> {
+    let result =
+        stream_body_to_file_inner(body, path, max_bytes, idle_timeout, total_timeout).await;
+    if result.is_err() {
+        // One place to drop the partial file, whichever deadline or error ended
+        // the transfer.
+        let _ = tokio::fs::remove_file(path).await;
+    }
+    result
+}
+
+async fn stream_body_to_file_inner(
+    body: Body,
+    path: &Path,
+    max_bytes: usize,
+    idle_timeout: Duration,
+    total_timeout: Duration,
+) -> Result<(), StreamBodyError> {
+    let deadline = tokio::time::Instant::now() + total_timeout;
     let mut file = tokio::fs::File::create(path)
         .await
         .map_err(|_| StreamBodyError::Io)?;
     let mut written = 0usize;
     let mut stream = body.into_data_stream();
-    while let Some(chunk) = stream.next().await {
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return Err(StreamBodyError::Timeout);
+        }
+        let next = match tokio::time::timeout(idle_timeout.min(remaining), stream.next()).await {
+            Ok(next) => next,
+            Err(_) => return Err(StreamBodyError::Timeout),
+        };
+        let Some(chunk) = next else { break };
         let data = chunk.map_err(|_| StreamBodyError::Io)?;
         if written.saturating_add(data.len()) > max_bytes {
-            drop(file);
-            let _ = tokio::fs::remove_file(path).await;
             return Err(StreamBodyError::TooLarge);
         }
         written += data.len();
         if file.write_all(&data).await.is_err() {
-            drop(file);
-            let _ = tokio::fs::remove_file(path).await;
             return Err(StreamBodyError::Io);
         }
     }
     if file.flush().await.is_err() {
-        let _ = tokio::fs::remove_file(path).await;
         return Err(StreamBodyError::Io);
     }
     Ok(())
@@ -1619,6 +1713,64 @@ fn resolve_job_path(job_dir: &Path, path: &str) -> PathBuf {
 mod tests {
     use super::*;
     use std::net::Ipv6Addr;
+
+    /// A client that opens the upload and then goes quiet must not keep the
+    /// handler -- and with it the upload and admission permits -- alive: those
+    /// permits are what a later upload needs to avoid a 429.
+    #[tokio::test]
+    async fn a_stalled_upload_gives_up_and_removes_the_partial_file() {
+        let dir = std::env::temp_dir().join("gtfs_web_upload_idle_timeout");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        let path = dir.join("input.zip");
+        let body = Body::from_stream(futures_util::stream::pending::<
+            Result<axum::body::Bytes, std::io::Error>,
+        >());
+
+        let started = Instant::now();
+        let error = stream_body_to_file(
+            body,
+            &path,
+            1024,
+            Duration::from_millis(50),
+            Duration::from_secs(30),
+        )
+        .await
+        .expect_err("a body that never arrives must not block forever");
+
+        assert_eq!(error, StreamBodyError::Timeout);
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(!path.exists(), "the partial file must be removed");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A trickle that keeps resetting the idle timer still hits the ceiling.
+    #[tokio::test]
+    async fn a_trickling_upload_hits_the_total_deadline() {
+        let dir = std::env::temp_dir().join("gtfs_web_upload_total_timeout");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        let path = dir.join("input.zip");
+        let body = Body::from_stream(futures_util::stream::unfold((), |()| async {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+            Some((
+                Ok::<_, std::io::Error>(axum::body::Bytes::from_static(b"x")),
+                (),
+            ))
+        }));
+
+        let error = stream_body_to_file(
+            body,
+            &path,
+            1024 * 1024,
+            Duration::from_secs(30),
+            Duration::from_millis(100),
+        )
+        .await
+        .expect_err("an endless trickle must not block forever");
+
+        assert_eq!(error, StreamBodyError::Timeout);
+        assert!(!path.exists(), "the partial file must be removed");
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn is_global_ip_rejects_internal_ipv4() {

@@ -78,7 +78,8 @@
 - `--fix-dry-run` enumerates planned edits without writing anything.
 - `--fix` applies safe fixes; `--fix-unsafe` also applies confirm-level and unsafe ones.
 - `--fix-output` sets the destination (default `<input>.fixed.<ext>`). The input is never
-  modified and an existing output path is refused.
+  modified; an existing output path is refused, and so is a path inside the input
+  feed directory, which would otherwise be copied into itself.
 - Safe structural fixes can reorder raw `stop_times.txt` records; orphan row
   deletion is reserved for `--fix-unsafe` and guarded by the expected foreign-key value.
 - After writing, the CLI validates the repaired feed and prints resolved,

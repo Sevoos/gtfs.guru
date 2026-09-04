@@ -1180,6 +1180,13 @@ fn run_validation(
     input_uri: Option<&str>,
     started_at: Instant,
 ) -> anyhow::Result<()> {
+    // The country only reached the report summary before, so the report claimed
+    // a country the rules never saw: country-dependent checks (phone numbers
+    // among them) read it from the validation context, exactly as the CLI sets
+    // it. Held across the whole validation, and dropped with this function --
+    // the context is thread-local and this runs on a blocking pool thread.
+    let _country_guard = normalized_country_code(country_code)
+        .map(|code| gtfs_guru_core::set_validation_country_code(Some(code)));
     let input = GtfsInput::from_path(input_path)?;
     let runner = default_runner();
     let outcome = validate_input(&input, &runner);
@@ -1222,6 +1229,15 @@ fn run_validation(
     ValidationReport::from_container(&system_errors)
         .write_json(output_dir.join("system_errors.json"))?;
     Ok(())
+}
+
+/// Trim and reject the "unknown country" placeholder, matching how the CLI
+/// decides whether a `--country-code` is worth setting.
+fn normalized_country_code(country_code: Option<&str>) -> Option<String> {
+    country_code
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("ZZ"))
+        .map(str::to_string)
 }
 
 fn write_execution_result(job_dir: &Path, result: Result<(), String>) {
@@ -1713,6 +1729,42 @@ fn resolve_job_path(job_dir: &Path, path: &str) -> PathBuf {
 mod tests {
     use super::*;
     use std::net::Ipv6Addr;
+
+    /// The country the caller sent must reach the rules, not only the report
+    /// summary: country-dependent checks are silently skipped without it, so
+    /// the API would report a clean feed the CLI flags.
+    #[test]
+    fn the_requested_country_code_reaches_country_dependent_rules() {
+        let feed_dir = std::env::temp_dir().join("gtfs_web_country_code_feed");
+        std::fs::remove_dir_all(&feed_dir).ok();
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test-gtfs-feeds/base-valid");
+        std::fs::create_dir_all(&feed_dir).expect("create feed dir");
+        for entry in std::fs::read_dir(&source).expect("read fixture") {
+            let entry = entry.expect("entry");
+            std::fs::copy(entry.path(), feed_dir.join(entry.file_name())).expect("copy");
+        }
+        let agency = std::fs::read_to_string(feed_dir.join("agency.txt")).expect("read agency");
+        std::fs::write(
+            feed_dir.join("agency.txt"),
+            agency.replace("+1-555-555-5555", "not-a-phone"),
+        )
+        .expect("write agency");
+
+        let phone_notices = |country: Option<&str>| {
+            let output = feed_dir.join(match country {
+                Some(_) => "out-country",
+                None => "out-plain",
+            });
+            std::fs::create_dir_all(&output).expect("create output");
+            run_validation(&feed_dir, &output, country, None, Instant::now()).expect("validate");
+            std::fs::read_to_string(output.join("report.json")).expect("read report")
+        };
+
+        assert!(phone_notices(Some("US")).contains("invalid_phone_number"));
+        assert!(!phone_notices(None).contains("invalid_phone_number"));
+
+        std::fs::remove_dir_all(&feed_dir).ok();
+    }
 
     /// A client that opens the upload and then goes quiet must not keep the
     /// handler -- and with it the upload and admission permits -- alive: those

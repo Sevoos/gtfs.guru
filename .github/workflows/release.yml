@@ -281,6 +281,10 @@ jobs:
       contents: write
     
     steps:
+      # The release note header is composed from the checked-out spec baseline,
+      # so this job needs the repository, not only the build artifacts.
+      - uses: actions/checkout@v7
+
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:

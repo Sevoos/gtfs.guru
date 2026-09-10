@@ -36,6 +36,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE = ROOT / "crates" / "gtfs_validator_core" / "spec_baseline.json"
 DEFAULT_CHANGES = ROOT / "crates" / "gtfs_validator_core" / "spec_changes.json"
+DEFAULT_RT_BASELINE = ROOT / "crates" / "gtfs_validator_rt" / "spec_baseline.json"
 DEFAULT_REPORT_DIR = ROOT / "target" / "spec-watch"
 
 GITHUB_API = "https://api.github.com"
@@ -1066,6 +1067,118 @@ def run_check_coordination(args: argparse.Namespace) -> int:
     return 0
 
 
+def sha256_file(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def check_vendored_schema(baseline: dict, baseline_path: pathlib.Path) -> list[str]:
+    """Confirm the committed schema is still the file the baseline pins.
+
+    Purely local, and the reason the digest is recorded at all: the vendored
+    `.proto` is a build input, so an edit to it silently moves GTFS Guru off the
+    official wire format.
+    """
+    vendored = baseline.get("vendoredSchema")
+    if not vendored:
+        return ["baseline records no vendoredSchema block"]
+
+    path = baseline_path.parent / vendored["path"]
+    if not path.exists():
+        return [f"vendored schema is missing: {vendored['path']}"]
+
+    reasons = []
+    actual_size = path.stat().st_size
+    if actual_size != vendored["sizeBytes"]:
+        reasons.append(
+            f"vendored schema is {actual_size} bytes, baseline records "
+            f"{vendored['sizeBytes']}"
+        )
+    actual_sha = sha256_file(path)
+    if actual_sha != vendored["sha256"]:
+        reasons.append(
+            f"vendored schema digest is {actual_sha[:12]}, baseline records "
+            f"{vendored['sha256'][:12]}: the committed file has been edited"
+        )
+    return reasons
+
+
+def fetch_rt_path_heads(baseline: dict, token: str | None) -> dict[str, dict]:
+    """Newest commit touching each pinned path, keyed by path."""
+    revision = baseline["specRevision"]
+    repo = revision["repository"]
+    heads = {}
+    for path in revision["specPaths"]:
+        commits = github_json(
+            f"/repos/{repo}/commits?path={path}&sha={revision['ref']}&per_page=1", token
+        )
+        if not commits:
+            raise WatchError(f"no commits found for {repo}:{path}")
+        head = commits[0]
+        heads[path] = {
+            "commit": head["sha"],
+            "committedAt": head["commit"]["committer"]["date"],
+            "message": head["commit"]["message"].splitlines()[0],
+        }
+    return heads
+
+
+def run_check_rt(args: argparse.Namespace) -> int:
+    """Drift for the GTFS-Realtime baseline.
+
+    The Schedule watcher compares a rule surface against the specification and
+    the canonical validator. There is no RT rule surface yet, so this answers the
+    two questions that can be answered: is the committed schema still the file we
+    pinned, and has upstream moved past the revision we pinned it at.
+
+    Paths are compared by commit date rather than by SHA. A pinned revision names
+    a repository state, not a state of every file in it, so the newest commit
+    touching one path is legitimately not the pinned commit.
+    """
+    baseline_path = args.rt_baseline
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    pinned_at = baseline["specRevision"]["committedAt"]
+
+    reasons = check_vendored_schema(baseline, baseline_path)
+
+    if args.skip_upstream:
+        heads = {}
+    elif args.head_file:
+        heads = json.loads(args.head_file.read_text(encoding="utf-8"))
+    else:
+        heads = fetch_rt_path_heads(baseline, args.github_token or os.environ.get("GITHUB_TOKEN"))
+
+    for path, head in sorted(heads.items()):
+        if head["committedAt"] > pinned_at:
+            reasons.append(
+                f"{path} moved upstream: {short(head['commit'])} at "
+                f"{head['committedAt']} -- {head['message']}"
+            )
+
+    if not reasons:
+        scope = (
+            "the committed schema digest matches"
+            if args.skip_upstream
+            else "the committed schema digest and the upstream paths match"
+        )
+        print(
+            f"no RT drift: {scope} the baseline pinned at "
+            f"{short(baseline['specRevision']['commit'])}"
+        )
+        return 0
+
+    print(f"RT drift detected against {baseline['specRevision']['commit'][:12]}:")
+    for reason in reasons:
+        print(f"  - {reason}")
+    print(
+        "\nMoving the RT baseline means re-vendoring the schema, updating every row of "
+        "proto/UPSTREAM.md and the digest in spec_baseline.json, then re-running the "
+        "decoder and parity suites."
+    )
+    return 3 if args.fail_on_drift else 0
+
+
 def add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--baseline",
@@ -1163,6 +1276,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="git ref to compare against (default: %(default)s)",
     )
     coordination.set_defaults(func=run_check_coordination)
+
+    check_rt = subparsers.add_parser(
+        "check-rt",
+        help="report drift against the GTFS-Realtime baseline",
+    )
+    check_rt.add_argument(
+        "--rt-baseline",
+        type=pathlib.Path,
+        default=DEFAULT_RT_BASELINE,
+        help="RT baseline document (default: %(default)s)",
+    )
+    check_rt.add_argument("--github-token", help="defaults to $GITHUB_TOKEN")
+    check_rt.add_argument(
+        "--skip-upstream",
+        action="store_true",
+        help="verify only the committed schema digest, without network access",
+    )
+    check_rt.add_argument(
+        "--head-file",
+        type=pathlib.Path,
+        help="path-to-head-commit JSON, in place of querying GitHub",
+    )
+    check_rt.add_argument(
+        "--fail-on-drift",
+        action="store_true",
+        help="exit 3 when drift is found, for local use and tests",
+    )
+    check_rt.set_defaults(func=run_check_rt)
 
     return parser
 

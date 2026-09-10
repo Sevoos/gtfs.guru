@@ -67,6 +67,48 @@ Presence is only compared for fields the reference marks plainly **Required**.
 would produce noise instead of signal — those changes surface as a moved spec
 revision (reason 2) for a human to read.
 
+## The GTFS-Realtime baseline
+
+`check-rt` watches the second, independent pin: the GTFS-Realtime schema
+revision in `crates/gtfs_validator_rt/spec_baseline.json`. The Schedule baseline
+and the RT baseline both point into `google/transit` but at different commits,
+and they move on their own schedules, so one watcher cannot cover both.
+
+There is no RT rule surface to compare yet, so it answers the two questions that
+can be answered today:
+
+1. **Is the committed schema still the file we pinned?** The vendored
+   `gtfs-realtime.proto` is a build input, so an edit to it silently moves
+   gtfs.guru off the official wire format. The digest in the baseline is what
+   proves that has not happened. This half is local and needs no network.
+2. **Has upstream moved past the pinned revision?** Each path in `specPaths` is
+   compared by commit date, not by SHA. A pinned revision names a repository
+   state rather than a state of every file in it, so the newest commit touching
+   one path is legitimately not the pinned commit; only a *newer* one is drift.
+
+```bash
+# Both halves
+python3 scripts/spec_watch.py check-rt
+
+# Digest only, offline -- fast enough for a pre-commit hook
+python3 scripts/spec_watch.py check-rt --skip-upstream
+
+# Exit 3 on drift
+python3 scripts/spec_watch.py check-rt --fail-on-drift
+```
+
+It reports and does not open a Linear issue: RT drift is acted on by
+re-vendoring rather than by reconciling a rule surface. Moving the RT baseline
+means replacing the schema, updating every row of `proto/UPSTREAM.md` and the
+digest in `spec_baseline.json`, then re-running the decoder and parity suites —
+a schema bump can change generated Rust types, and the pinned Java validator
+stays on `gtfs-realtime-bindings:0.0.4`, so newer fields have no canonical
+counterpart and need classifying as current-spec behaviour.
+
+The weekly workflow runs it after the Schedule check. `RealtimeBaselineCase` in
+`scripts/spec_watch_test.py` covers it offline, building its own schema file and
+digest, since the digest is the subject under test.
+
 ## Running it by hand
 
 Build the CLI first and hand it over, so the script does not fall back to

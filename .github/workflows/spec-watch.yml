@@ -28,6 +28,9 @@ on:
       - "scripts/spec_watch_test.py"
       - "scripts/spec_watch_fixtures/**"
       - "crates/gtfs_validator_core/spec_baseline.json"
+      - "crates/gtfs_validator_rt/spec_baseline.json"
+      - "crates/gtfs_validator_rt/proto/**"
+      - "scripts/rt_parity/**"
       - "crates/gtfs_validator_core/spec_changes.json"
       - "crates/gtfs_validator_core/src/spec_baseline.rs"
       - "crates/gtfs_validator_core/src/spec_changes.rs"
@@ -40,6 +43,9 @@ on:
       - "scripts/spec_watch_test.py"
       - "scripts/spec_watch_fixtures/**"
       - "crates/gtfs_validator_core/spec_baseline.json"
+      - "crates/gtfs_validator_rt/spec_baseline.json"
+      - "crates/gtfs_validator_rt/proto/**"
+      - "scripts/rt_parity/**"
       - "crates/gtfs_validator_core/spec_changes.json"
       - "crates/gtfs_validator_core/src/spec_baseline.rs"
       - "crates/gtfs_validator_core/src/spec_changes.rs"
@@ -68,6 +74,15 @@ jobs:
       # going quiet in the weekly run.
       - name: Watcher detection tests
         run: python3 scripts/spec_watch_test.py
+
+      # The approved-deltas ledger takes the RT baseline as its subject: an
+      # approval describes a difference against one oracle binary and one
+      # schema revision, so it goes stale the moment those pins move. Offline
+      # and instant, like the tests above.
+      - name: Expected-deltas ledger
+        run: |
+          python3 scripts/rt_parity/check_expected_deltas_test.py
+          python3 scripts/rt_parity/check_expected_deltas.py
 
   coordination:
     name: Baseline coordination
@@ -152,6 +167,32 @@ jobs:
           python3 scripts/spec_watch.py check \
             --linear-team-key "$LINEAR_TEAM_KEY" \
             "${extra[@]}"
+
+      # The RT baseline pins a second, independent revision of google/transit
+      # and the vendored schema's digest. The check above knows nothing about
+      # either. It needs no CLI build: the schema digest is local, and the
+      # upstream half is two API calls.
+      - name: Check the GTFS-Realtime baseline
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          extra=()
+          if [ "${{ inputs.fail_on_drift }}" = "true" ]; then
+            extra+=(--fail-on-drift)
+          fi
+          mkdir -p target/spec-watch
+          status=0
+          python3 scripts/spec_watch.py check-rt "${extra[@]}" \
+            > target/spec-watch/rt-drift.txt 2>&1 || status=$?
+          cat target/spec-watch/rt-drift.txt
+          {
+            echo "## GTFS-Realtime baseline"
+            echo '```'
+            cat target/spec-watch/rt-drift.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
 
       - name: Add the drift report to the run summary
         if: always()

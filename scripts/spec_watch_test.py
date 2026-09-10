@@ -13,6 +13,7 @@ network, no cargo build.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import shutil
@@ -466,6 +467,157 @@ class CoordinationCase(unittest.TestCase):
         result = self.coordination()
 
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class RealtimeBaselineCase(unittest.TestCase):
+    """`check-rt`: the committed schema digest, and upstream movement.
+
+    Built in the temp directory rather than from committed fixtures -- the
+    check's whole subject is a file's digest, so the test needs to author the
+    file and the digest that describes it.
+    """
+
+    SCHEMA = b'syntax = "proto2";\npackage transit_realtime;\n'
+    PINNED_AT = "2026-08-17T19:50:33Z"
+
+    def setUp(self) -> None:
+        self.workdir = pathlib.Path(tempfile.mkdtemp(prefix="spec-watch-rt-test-"))
+        self.addCleanup(shutil.rmtree, self.workdir, True)
+
+        self.schema_path = self.workdir / "proto" / "gtfs-realtime.proto"
+        self.schema_path.parent.mkdir(parents=True)
+        self.schema_path.write_bytes(self.SCHEMA)
+
+        self.baseline_path = self.workdir / "spec_baseline.json"
+        self.write_baseline(
+            sha256=hashlib.sha256(self.SCHEMA).hexdigest(),
+            size=len(self.SCHEMA),
+        )
+        self.write_heads({})
+
+    def write_baseline(self, sha256: str, size: int) -> None:
+        self.baseline_path.write_text(
+            json.dumps(
+                {
+                    "specRevision": {
+                        "repository": "google/transit",
+                        "ref": "master",
+                        "commit": "474750a163088673df718838d4a1bb093391f9af",
+                        "committedAt": self.PINNED_AT,
+                        "specPaths": [
+                            "gtfs-realtime/proto/gtfs-realtime.proto",
+                            "gtfs-realtime/spec/en/reference.md",
+                        ],
+                    },
+                    "vendoredSchema": {
+                        "path": "proto/gtfs-realtime.proto",
+                        "sha256": sha256,
+                        "sizeBytes": size,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def write_heads(self, heads: dict) -> None:
+        self.heads_path = self.workdir / "heads.json"
+        self.heads_path.write_text(json.dumps(heads), encoding="utf-8")
+
+    def check_rt(self, *extra: str) -> subprocess.CompletedProcess:
+        cmd = [
+            sys.executable,
+            str(SCRIPT),
+            "check-rt",
+            "--rt-baseline",
+            str(self.baseline_path),
+            "--head-file",
+            str(self.heads_path),
+            "--fail-on-drift",
+            *extra,
+        ]
+        return subprocess.run(cmd, capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+
+    # -- tests ------------------------------------------------------------
+
+    def test_matching_digest_and_unmoved_paths_stay_quiet(self) -> None:
+        self.write_heads(
+            {
+                "gtfs-realtime/proto/gtfs-realtime.proto": {
+                    "commit": "474750a163088673df718838d4a1bb093391f9af",
+                    "committedAt": self.PINNED_AT,
+                    "message": "Mark images in Service Alerts as final",
+                }
+            }
+        )
+        result = self.check_rt()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("no RT drift", result.stdout)
+
+    def test_edited_vendored_schema_is_caught(self) -> None:
+        self.schema_path.write_bytes(self.SCHEMA + b"// a local edit\n")
+
+        result = self.check_rt()
+
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertIn("has been edited", result.stdout)
+
+    def test_missing_vendored_schema_is_caught(self) -> None:
+        self.schema_path.unlink()
+
+        result = self.check_rt()
+
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertIn("missing", result.stdout)
+
+    def test_a_newer_upstream_commit_is_drift(self) -> None:
+        self.write_heads(
+            {
+                "gtfs-realtime/spec/en/reference.md": {
+                    "commit": "262ae1e46e3f0000000000000000000000000000",
+                    "committedAt": "2026-09-09T14:19:06Z",
+                    "message": "Errors correction and formatting suggestions",
+                }
+            }
+        )
+        result = self.check_rt()
+
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertIn("reference.md moved upstream", result.stdout)
+        self.assertIn("262ae1e", result.stdout)
+
+    def test_a_path_older_than_the_pin_is_not_drift(self) -> None:
+        """A pinned revision names a repository state, not a state of every file
+        in it, so the newest commit touching one path is legitimately older than
+        the pinned commit."""
+        self.write_heads(
+            {
+                "gtfs-realtime/proto/gtfs-realtime.proto": {
+                    "commit": "0000000000000000000000000000000000000000",
+                    "committedAt": "2026-05-01T00:00:00Z",
+                    "message": "An older change to the schema",
+                }
+            }
+        )
+        result = self.check_rt()
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_skip_upstream_checks_only_the_digest(self) -> None:
+        self.write_heads(
+            {
+                "gtfs-realtime/spec/en/reference.md": {
+                    "commit": "262ae1e46e3f0000000000000000000000000000",
+                    "committedAt": "2026-09-09T14:19:06Z",
+                    "message": "Errors correction",
+                }
+            }
+        )
+        result = self.check_rt("--skip-upstream")
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("no RT drift", result.stdout)
+        self.assertNotIn("moved upstream", result.stdout)
 
 
 if __name__ == "__main__":

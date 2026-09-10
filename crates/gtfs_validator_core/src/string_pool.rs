@@ -71,6 +71,30 @@ impl StringPool {
         }
     }
 
+    /// Resolve a string that is already in the pool, without adding it.
+    ///
+    /// `intern` grows the pool on every miss. A GTFS-Realtime feed references
+    /// Schedule identifiers that may not exist -- that is precisely what the
+    /// cross-reference rules report -- and a long-running monitor interning
+    /// every unknown RT identifier would grow the Schedule pool without bound.
+    /// Resolution of RT references to Schedule rows therefore goes through
+    /// this, never through `intern`.
+    ///
+    /// Returns `None` for a string the pool has never seen, and also for the
+    /// empty string: `intern` maps that to `StringId(0)`, the codebase's
+    /// "absent" sentinel rather than a real entry, so reporting it as a
+    /// successful lookup would let an empty RT identifier read as a resolvable
+    /// reference. Whitespace is trimmed, as `intern` trims it.
+    pub fn lookup(&self, s: &str) -> Option<StringId> {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        // CompactString supports lookup by borrowed str, so a miss costs one
+        // hash and no allocation.
+        self.inner.map.get(trimmed).map(|id| *id)
+    }
+
     pub fn resolve(&self, id: StringId) -> String {
         if id.0 == 0 {
             return String::new();
@@ -101,6 +125,48 @@ mod tests {
         assert_eq!(pool.resolve(id1), "test");
         assert_eq!(pool.resolve(id3), "other");
         assert_eq!(pool.resolve(StringId(0)), "");
+    }
+
+    #[test]
+    fn lookup_finds_interned_strings_and_trims() {
+        let pool = StringPool::new();
+        let id = pool.intern("trip-1");
+
+        assert_eq!(pool.lookup("trip-1"), Some(id));
+        assert_eq!(pool.lookup("  trip-1  "), Some(id), "trims like intern");
+        assert_eq!(pool.lookup("trip-2"), None);
+    }
+
+    #[test]
+    fn lookup_treats_the_empty_string_as_absent() {
+        let pool = StringPool::new();
+        assert_eq!(
+            pool.intern(""),
+            StringId(0),
+            "intern maps empty to the sentinel"
+        );
+
+        assert_eq!(pool.lookup(""), None);
+        assert_eq!(pool.lookup("   "), None);
+    }
+
+    /// The reason this method exists: a miss must not allocate an id.
+    #[test]
+    fn lookup_does_not_grow_the_pool() {
+        let pool = StringPool::new();
+        let first = pool.intern("a");
+
+        for index in 0..100 {
+            assert_eq!(pool.lookup(&format!("missing-{index}")), None);
+        }
+
+        let second = pool.intern("b");
+        assert_eq!(
+            second.0,
+            first.0 + 1,
+            "the failed lookups consumed no identifiers"
+        );
+        assert_eq!(pool.resolve(second), "b");
     }
 
     #[test]

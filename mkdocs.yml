@@ -45,6 +45,7 @@ exclude_docs: |
   MAINTENANCE.md
   golden.md
   real-world-parity.md
+  rt-mvp.md
   spec-watch.md
   agents/
 

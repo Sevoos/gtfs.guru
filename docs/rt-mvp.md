@@ -1,225 +1,228 @@
-# GTFS-Realtime support: MVP plan
+# GTFS-Realtime support
 
-Repo-facing planning note. Excluded from the published site.
+Repo-facing note. Excluded from the published site.
 
-GTFS Guru validates static feeds only. The canonical GTFS-Realtime validator
-([MobilityData/gtfs-realtime-validator](https://github.com/MobilityData/gtfs-realtime-validator))
-is a separate Java service, so today an agency needs two tools and gets two
-unrelated reports. Validating both halves of a feed against each other in one
-run is the point of this work; raw speed is not, because RT messages are a few
-megabytes and every implementation parses them quickly.
+[GTF-11](https://linear.app/abasis/issue/GTF-11/add-gtfs-realtime-validation-to-gtfs-guru)
+is the plan of record: scope, the rule matrix, phase order, acceptance criteria.
+This file holds only what the repository can say and the issue cannot — what
+exists on disk, what was measured here, and the local facts the work runs into.
+Where the two disagree, GTF-11 wins.
 
-## Scope
+Reconciled against GTF-11 as of its 2026-09-01 revision. An earlier draft of
+this file predated that revision and has been corrected; the notes below flag
+where it had been wrong, because those errors were the kind that produce work
+which then has to be undone.
 
-In: a single-shot validation of one RT message, from a `.pb` file or a URL,
-optionally cross-checked against a static feed. 21 RT-only rules plus 12
-cross-reference rules.
+## Status
 
-Out: the monitoring mode and the four rules that compare successive snapshots
-(E018, W003, W007, W008); the remaining 15 cross-reference rules; RT in the
-browser, which CORS makes impractical; the desktop GUI.
+Phase 0 (freeze contracts and establish truth): five of ten items done — both
+upstream baselines pinned, the canonical JAR built and hashed, the official
+schema vendored and hashed, and prost's decoding behaviour verified. The five
+remaining are blocked on GTF-11's open questions, except the canonical
+performance baselines and the expected-delta record format.
 
-The canonical validator has 61 rules (52 errors, 9 warnings). This MVP covers
-33 of them.
+Phase 1 (vertical slice): the crate, the generated bindings, `RtFeed` and
+`RtSnapshotContext` exist. The next two items — one header rule, and CLI/JSON
+output — are blocked, on the frozen rule matrix and the report contract
+respectively.
 
-## Crate layout
+No rule is implemented, and nothing is wired into any surface.
 
-A new crate rather than a module inside the core. `gtfs_validator_core` is
-already around 40k lines, and protobuf dependencies have no business in the
-build of everyone who only validates a zip.
+## What is built
 
-```
+```text
 crates/gtfs_validator_rt/
-  build.rs                     # protox -> prost codegen
-  proto/gtfs-realtime.proto    # vendored official schema
+  Cargo.toml
+  build.rs                     # protox -> prost codegen, no system protoc
+  spec_baseline.json           # pinned schema + canonical Java revisions
+  proto/
+    gtfs-realtime.proto        # vendored official schema
+    UPSTREAM.md                # provenance and re-verification
   src/
     lib.rs
-    feed.rs                    # RtFeed
-    validator.rs               # RtValidator, RtValidatorRunner
-    index.rs                   # static-feed indexes for cross-checks
-    rules/
-      mod.rs
-      header.rs
-      timestamps.rs
-      trip_updates.rs
-      vehicle_positions.rs
-      alerts.rs
-      cross_static.rs
+    feed.rs                    # RtFeed, RtSource, ContentFingerprint
+    context.rs                 # RtSnapshotContext, RtEntityRef
+  tests/
+    decoder.rs                 # prost behaviour under hostile input
+    feed_and_context.rs
 ```
 
-The dependency runs one way: `gtfs_validator_rt` depends on
-`gtfs_validator_core`, never the reverse. The core stays unaware of RT.
+GTF-11's layout adds `validator.rs`, `index.rs`, `notice_schema.rs`, and
+`rules/` as their phases arrive.
 
-### Protobuf bindings
+The dependency runs one way — `gtfs-guru-rt` depends on `gtfs-guru-core`, never
+the reverse — so consumers who only validate a zip never build protobuf.
 
-Generate them rather than depending on the [`gtfs-rt`](https://crates.io/crates/gtfs-rt)
-crate. That crate's last release is 0.5.0 from March 2024 — two years without
-an update while the RT spec kept moving.
+### Pinned baselines
 
-`gtfs-realtime.proto` is a single official file. Compiling it with `protox`
-(a pure-Rust protobuf compiler) instead of `prost-build` keeps `protoc` out of
-the CI image. `prost` generates safe code, so `#![forbid(unsafe_code)]` holds.
+`spec_baseline.json` pins the schema revision, the vendored file's SHA-256, and
+the canonical Java commit; `proto/UPSTREAM.md` carries the provenance and the
+commands to re-verify. Generated code is never committed: it is reproduced from
+the vendored schema on every build, so the schema stays the single source of
+truth.
 
-## Types
+One caveat on the canonical JAR. Its SHA-256 is recorded, but a Maven shade
+build stamps every archive entry with the build time, so the same commit rebuilt
+yields a different digest. The hash identifies one oracle binary — enough to
+prove two parity runs used the same one — and cannot be reproduced from the
+commit alone. `spec_baseline.json` records this as
+`"jarReproducibleFromCommit": false`. GTF-11's acceptance criterion asks for the
+baselines to be "pinned reproducibly", which the schema satisfies and the JAR
+does not; closing that gap needs either a reproducible Maven build or a digest
+over class contents rather than the archive.
 
-```rust
-pub struct RtFeed {
-    pub message: FeedMessage,       // prost-generated
-    pub source: RtSource,           // File(PathBuf) | Url(String)
-    pub fetched_at: DateTime<Utc>,  // for freshness rules
-}
+### RtFeed
 
-pub trait RtValidator: Send + Sync {
-    fn name(&self) -> &'static str;
-    fn validate(
-        &self,
-        rt: &RtFeed,
-        static_feed: Option<&GtfsFeed>,
-        notices: &mut NoticeContainer,
-    );
-}
-```
+Carries the decoded message, its source, `encoded_len`, and a SHA-256
+`ContentFingerprint` **taken over the bytes as received, before decoding**. The
+raw buffer is not retained.
 
-`static_feed` is an `Option` on purpose: an RT feed alone must still yield the
-21 RT-only rules. When it is absent the cross-checks are skipped, and the
-report has to say so in as many words rather than falling silent.
+GTF-11 left open whether raw bytes or a fingerprint belong here, to be settled
+by the Phase 0 extension and equality tests. They settled it: prost keeps no
+unknown-field set, so a re-encoding does not reproduce the input and two
+snapshots differing only in extension data compare equal as decoded values. A
+fingerprint over the raw input is what the duplicate-detection rules (E017,
+Phase 7) actually need, and it satisfies the issue's instruction not to retain
+an extra full input buffer without a demonstrated need.
 
-The runner is a fresh, sequential one. The rayon fan-out, panic catching, and
-timing collection in `ValidatorRunner` (`crates/gtfs_validator_core/src/validator.rs`)
-exist for feeds with millions of `stop_times.txt` rows; 33 rules over a few
-megabytes finish in milliseconds. Making the existing runner generic over the
-feed type would touch all 110 static rules for no gain.
+Size bounding lives here, at the edge where bytes enter, because the decoder
+imposes no ceiling of its own. `DEFAULT_MAX_RT_BYTES` is 256 MiB, overridable
+with `GTFS_VALIDATOR_MAX_RT_BYTES` to match the Schedule reader's convention;
+`from_path` checks metadata before reading, so an oversized file is refused
+without allocating the payload the limit exists to reject. `*_with_limit`
+variants let the CLI and URL adapters pass their own bound.
 
-## Notices
+`RtFeedError` separates decode failure from validation. Only structurally
+impossible input lands there — truncation, a lying length prefix, a wrong wire
+type. Input that is merely invalid decodes successfully and belongs to rules.
 
-`NoticeContainer` and `ValidationNotice` are reused unchanged.
-`ValidationNotice` (`crates/gtfs_validator_core/src/notice.rs`) already keeps
-`file`, `row`, and `field` optional and carries a free-form `context` map, which
-is exactly the shape RT needs:
+### RtSnapshotContext
 
-- `file` — the source name
-- `row` — left empty
-- `context` — `entityId`, `tripId`, `vehicleId`, `stopId`, `stopSequence`,
-  `timestamp`
+Built once, in one pass, in the producer's entity order, and never rebuilt. The
+canonical Java validator re-scans the entity list once per validator — seven of
+its nine scan unconditionally — and this is what avoids that.
 
-Notice codes follow the existing snake_case convention (`service_never_active`,
-`pathway_loop`), not the canonical `E001` form. The canonical ID goes into
-`notice_metadata.json` as a separate field so anyone migrating from the
-MobilityData validator can map the two sets.
+An entity carrying several payloads appears in *each* matching list under one
+shared `entity_index`. The protobuf uses independent optional fields, so a
+malformed entity really can populate more than one, and `tests/decoder.rs` pins
+that such input decodes. Collapsing the payload into an exclusive enum would
+hide it from the rules meant to report it.
 
-This means every RT notice needs a `notice_metadata.json` entry and a
-`NOTICE_SCHEMA_ENTRIES` row, or `--export-notices-schema` comes out incomplete.
-33 entries by hand.
+Alongside the payload lists it carries the shared facts GTF-11 anticipates:
+`duplicate_entity_ids` in first-seen order with every occurrence,
+`entities_without_id`, `entities_without_payload`, and counts of the payload
+types no candidate MVP rule reads (shapes, stops, trip modifications), so a
+message of only those is not mistaken for an empty one. Nothing iterates a hash map, so no
+output depends on hash order.
 
-## Indexes for cross-checks
+`observed_at` is supplied by the caller and never read from the system clock, so
+freshness and future-timestamp rules give the same answer for a local file, a
+recorded fixture, and an archived snapshot. The struct is `#[non_exhaustive]`
+with a `new()` constructor, so Phase 3 can add `static_index` without a breaking
+change to a published crate.
 
-`GtfsFeed` (`crates/gtfs_validator_core/src/feed.rs`) already maintains
-`stop_times_by_trip`, which covers the expensive half. `index.rs` builds the
-rest once per run:
+## Phase 0 decoder findings (measured 2026-09-10)
 
-- `trip_id` → `&Trip`
-- `stop_id` → `&Stop`, including `location_type` so RT references to a station
-  instead of a platform can be caught
-- `route_id` → `&Route`
-- the set of `trip_id`s appearing in `frequencies.txt`, since frequency-based
-  trips validate differently
+Executable answers to GTF-11's Phase 0 requirement to verify prost's
+required-field, unknown-field, extension, and equality behaviour before rules
+are written. Pinned by `crates/gtfs_validator_rt/tests/decoder.rs`; the Java
+column comes from replaying identical bytes through
+`gtfs-realtime-bindings:0.0.4` with `scripts/rt_parity/decoder_java_check.java`.
 
-## Rules
+| Input | prost | Java 0.0.4 |
+| :--- | :--- | :--- |
+| Empty | decodes to defaults | rejected: missing required `header` |
+| No `header` | decodes | rejected |
+| No `header.gtfs_realtime_version` | decodes | rejected |
+| No `trip_update.trip` | decodes | rejected |
+| Unknown field | decodes, **dropped** | parsed, **retained**, round-trip identical |
+| Extension field (1000-1999) | decodes, **dropped** | parsed, **retained**, round-trip identical |
+| Unknown enum value | `Some(99)` — present, invalid | `hasIncrementality()==false` — absent |
+| Truncated | `BufferUnderflow`, names the field | n/a |
 
-### RT-only (21)
+Four consequences.
 
-Timestamp handling (POSIX form, not in the future, present in both the header
-and the entities), `gtfs_realtime_version` in the header, `incrementality`,
-`is_deleted` inside a `FULL_DATASET`, `stop_time_update` ordering by
-`stop_sequence`, departure preceding arrival, presence of `stop_id` or
-`stop_sequence`, agreement between `schedule_relationship` and the presence of
-times, coordinate and bearing ranges, and `vehicle.id` presence and uniqueness.
+**prost does not enforce proto2 `required`.** Every required-field presence
+check must be an explicit rule; the decoder will never raise one. Worse, because
+`required` generates a non-`Option` field, an absent `gtfs_realtime_version` and
+one explicitly set to `""` decode to the same value, so no rule can separate
+them from the decoded message alone. This is the largest parity divergence
+found: Java rejects four of these fixtures outright where GTFS Guru decodes and
+continues.
 
-### Cross-reference with static (12)
+**Content identity must fingerprint the raw bytes**, as described under `RtFeed`
+above.
 
-1. RT `trip_id` missing from `trips.txt`
-2. RT `route_id` missing from `routes.txt`
-3. RT `route_id` disagrees with the trip's `route_id` in the static feed
-4. RT `stop_id` missing from `stops.txt`
-5. RT `stop_id` points at a station rather than a platform (`location_type != 0`)
-6. RT `stop_sequence` does not exist on that trip
-7. the `stop_id`/`stop_sequence` pair contradicts the schedule
-8. RT `direction_id` disagrees with the static feed
-9. `start_date` falls outside the trip's service period
-10. `start_time` disagrees with the schedule for a non-frequency trip
-11. a frequency-based trip carries no `start_time`
-12. an Alert `informed_entity` references entities that do not exist
+**Extension data is invisible.** MTA/NYCT-style feeds decode without error, but
+their extension payloads are unreachable, so no selected rule may depend on
+them.
 
-Pin each rule to its canonical E-code against
-[RULES.md](https://github.com/MobilityData/gtfs-realtime-validator/blob/master/RULES.md)
-during implementation. Do not map them from memory.
+**Nothing bounds message size.** A 50k-entity message decodes with allocation
+tracking the input.
 
-## Surfaces
+Two of these need a decision rather than documentation: whether the
+required-field divergence is reported as one decode-failure notice (Java-like)
+or per-field notices (Rust-like), and which reading of an unknown enum value is
+canonical. Both are approved-delta material under GTF-11's expected-delta
+lifecycle.
 
-### CLI
+## Local facts for the work ahead
 
-A subcommand, not a flag on the default run:
+**RT notice metadata stays separate.** GTF-11 requires
+`gtfs_validator_rt/rt_notice_metadata.json` and `build_rt_notice_schema_map()`,
+because adding RT codes to the Schedule notice schema would make them part of
+the Schedule specification surface. An earlier draft of this file said the
+opposite — that each RT notice needs a `notice_metadata.json` entry and a
+`NOTICE_SCHEMA_ENTRIES` row. It does not.
 
-```bash
-gtfs-guru rt --rt feed.pb -i static.zip -o ./out
-gtfs-guru rt --rt-url https://example.com/tripupdates.pb --no-static
-```
+**Notice context.** RT notices have no CSV row. `ValidationNotice`
+(`crates/gtfs_validator_core/src/notice.rs`) already keeps `file`, `row`, and
+`field` optional and carries a free-form context map, which is the shape RT
+needs. `entityIndex` is the primary locator; GTF-11 lists the full field set.
 
-`crates/gtfs_validator_cli/src/main.rs` is already 1869 lines in a single file.
-The subcommand goes in its own module, which is a reasonable place to start
-breaking that file up.
+**A dedicated, sequential runner.** The rayon fan-out, panic catching, and
+timing collection in `ValidatorRunner`
+(`crates/gtfs_validator_core/src/validator.rs`) exist for feeds with millions of
+`stop_times.txt` rows. GTF-11 says not to generalise it, since it is tied to
+`GtfsFeed`, the Schedule validation context, and Rayon; locally, making it
+generic over the feed type would touch every static rule for no gain on a few
+megabytes of protobuf.
 
-`--fail-on`, `--sarif`, `--stdout`, and the JSON report are reused as they are.
-The RT report keeps the existing structure with its own section.
+**`StringPool` has no non-inserting lookup.**
+`crates/gtfs_validator_core/src/string_pool.rs` exposes only `new`, `intern`,
+and `resolve`. Phase 3 needs `lookup(&str) -> Option<StringId>`; interning every
+unknown RT identifier would let a long-running monitor grow the Schedule pool
+without bound. Small and additive — it can land on its own.
 
-### MCP
+**`stop_times_by_trip` already exists** on `GtfsFeed`
+(`crates/gtfs_validator_core/src/feed.rs`), covering the expensive half of the
+cross-reference indexes.
 
-One new tool, `validate_gtfs_rt`, answering in the same shape as
-`validate_gtfs`: exact grouped totals plus up to three concrete examples per
-code and severity. URL fetching stays behind the existing `--allow-url`.
+**The CLI entry point is one 1908-line file.**
+`crates/gtfs_validator_cli/src/main.rs`. The `rt` subcommand should go in its own
+module, which is a reasonable place to start breaking that file up.
 
-### Python
+**Golden fixtures.** `scripts/build_demo_feed.py` produces the deterministic
+Schedule feed to pair with constructed RT messages. Parity fixtures must be
+recorded snapshots, hashed and paired with an exact Schedule dataset — not live
+feeds, which cannot be replayed in CI.
 
-`gtfs_guru.validate_rt(rt_path, static_path=None)`, returning the same report
-object as `validate`.
+**MCP URL fetching** already sits behind `--allow-url`
+(`crates/gtfs_validator_mcp/src/lib.rs`), which the RT tool should reuse.
 
-### WASM and GUI
+**The RT baseline is unwatched.** `scripts/spec_watch.py` hardcodes
+`crates/gtfs_validator_core/spec_baseline.json`, so nothing detects drift in the
+RT pin. It will also need to handle two independent pins into `google/transit`:
+the Schedule baseline is at `3215f98f`, the RT baseline at `474750a1`.
 
-Untouched in the MVP.
+## Open decisions
 
-## Tests
+GTF-11's "Decisions Required Before Implementation" is the list — nine questions
+for Igor, none answered as of that issue's 2026-09-01 revision. No competing
+list is kept here.
 
-1. Unit fixtures: build a `FeedMessage` in code, assert the rule fires, then
-   assert it stays quiet on the valid variant. Two tests per rule, 66 total.
-2. Golden test: the demo feed from `scripts/build_demo_feed.py` paired with a
-   constructed RT message carrying known defects, against a checked-in JSON
-   report.
-3. Parity: run 10 to 15 live RT feeds from the Mobility Database through both
-   this and the canonical Java validator and reconcile the differences one by
-   one. This is what earns trust in the rule set.
-
-## Schedule
-
-Roughly two to three weeks for one developer.
-
-| Week | Work |
-| :--- | :--- |
-| 1 | Crate, protox codegen, `RtFeed`, `RtValidator` and its runner, CLI subcommand, report section. One rule wired end to end, from parsing through to HTML and SARIF. |
-| 2 | The 21 RT-only rules, with tests. |
-| 3 | Indexes, the 12 cross-reference rules, 33 `notice_metadata.json` entries, MCP tool, Python binding, parity run, documentation. |
-
-Week 1 carries the risk. It is about threading a new kind of entity through
-reporting machinery built around CSV rows. Once a single rule reaches HTML and
-SARIF, the rest is mechanical.
-
-## Decisions to make before starting
-
-**Freshness without a monitoring mode.** "The header timestamp is too old"
-needs only the message and the current time, so it fits the MVP, but the
-threshold is arbitrary. Proposal: a hard default of 90 seconds, overridable
-with `--rt-max-age`.
-
-**How to express "no static feed".** Either an explicit `--no-static` flag or
-simply omitting `-i`. The second is quieter, but a user can then miss that 12
-rules never ran. Proposal: require the flag, and print a line in the report —
-"12 cross-checks skipped: no static feed given".
+One superseded proposal worth naming, since it appeared in the earlier draft of
+this file: a 90-second freshness default. The canonical W008 threshold is 65
+seconds, and GTF-11's question 6 asks whether that is the default. Whatever is
+chosen, a configurable override must be reported as a non-default validation
+profile.

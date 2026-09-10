@@ -213,7 +213,7 @@ feeds, which cannot be replayed in CI.
 **The RT baseline is unwatched.** `scripts/spec_watch.py` hardcodes
 `crates/gtfs_validator_core/spec_baseline.json`, so nothing detects drift in the
 RT pin. It will also need to handle two independent pins into `google/transit`:
-the Schedule baseline is at `3215f98f`, the RT baseline at `474750a1`.
+the Schedule baseline is at `3215f98f`, the RT baseline at `262ae1e4`.
 
 ## Open decisions
 

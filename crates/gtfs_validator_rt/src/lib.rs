@@ -68,7 +68,7 @@ mod tests {
             serde_json::from_str(RT_SPEC_BASELINE_JSON).expect("baseline is valid JSON");
         assert_eq!(
             baseline["specRevision"]["commit"],
-            "474750a163088673df718838d4a1bb093391f9af"
+            "262ae1e46e3f66099284fb8e4f976dfec788501f"
         );
     }
 }

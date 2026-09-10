@@ -2,8 +2,8 @@
   "specRevision": {
     "repository": "google/transit",
     "ref": "master",
-    "commit": "474750a163088673df718838d4a1bb093391f9af",
-    "committedAt": "2026-08-17T19:50:33Z",
+    "commit": "262ae1e46e3f66099284fb8e4f976dfec788501f",
+    "committedAt": "2026-09-09T14:19:06Z",
     "specPaths": [
       "gtfs-realtime/proto/gtfs-realtime.proto",
       "gtfs-realtime/spec/en/reference.md"
@@ -13,7 +13,7 @@
     "path": "proto/gtfs-realtime.proto",
     "sha256": "8feff2c5499e0ff08777e203e49ef702e07be0a8376b8bb2126add311a709299",
     "sizeBytes": 65237,
-    "sourceUrl": "https://raw.githubusercontent.com/google/transit/474750a163088673df718838d4a1bb093391f9af/gtfs-realtime/proto/gtfs-realtime.proto",
+    "sourceUrl": "https://raw.githubusercontent.com/google/transit/262ae1e46e3f66099284fb8e4f976dfec788501f/gtfs-realtime/proto/gtfs-realtime.proto",
     "license": "Apache-2.0",
     "licenseHolder": "The GTFS Specifications Authors"
   },
@@ -30,5 +30,5 @@
     "jarReproducibleFromCommit": false,
     "bindingsVerifiedInJar": "0.0.4"
   },
-  "updatedAt": "2026-09-09T00:00:00Z"
+  "updatedAt": "2026-09-10T00:00:00Z"
 }

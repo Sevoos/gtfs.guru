@@ -3,7 +3,7 @@
   "baseline": {
     "javaCommit": "7041fa3fcaf674bf730e17325c179d329cdff6f2",
     "javaJarSha256": "31b31b4b5f2d18562f5dcdd6dc407e4c1f1c9c07a9b63de65f0d37492a363ae8",
-    "rtSchemaCommit": "474750a163088673df718838d4a1bb093391f9af"
+    "rtSchemaCommit": "262ae1e46e3f66099284fb8e4f976dfec788501f"
   },
   "deltas": [
     {

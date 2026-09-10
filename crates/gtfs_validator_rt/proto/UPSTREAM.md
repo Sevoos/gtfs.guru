@@ -13,9 +13,9 @@ it has not happened.
 | | |
 |---|---|
 | Repository | [`google/transit`](https://github.com/google/transit) |
-| Commit | `474750a163088673df718838d4a1bb093391f9af` |
-| Commit subject | Mark images in Service Alerts as final (#651) |
-| Committed | 2026-08-17T19:50:33Z |
+| Commit | `262ae1e46e3f66099284fb8e4f976dfec788501f` |
+| Commit subject | Errors correction and formatting suggestions for consistency. (#641) |
+| Committed | 2026-09-09T14:19:06Z |
 | Upstream path | `gtfs-realtime/proto/gtfs-realtime.proto` |
 | SHA-256 | `8feff2c5499e0ff08777e203e49ef702e07be0a8376b8bb2126add311a709299` |
 | Size | 65237 bytes |
@@ -25,11 +25,15 @@ it has not happened.
 Immutable source URL:
 
 ```
-https://raw.githubusercontent.com/google/transit/474750a163088673df718838d4a1bb093391f9af/gtfs-realtime/proto/gtfs-realtime.proto
+https://raw.githubusercontent.com/google/transit/262ae1e46e3f66099284fb8e4f976dfec788501f/gtfs-realtime/proto/gtfs-realtime.proto
 ```
 
 The URL pins a commit SHA, not a branch, so it keeps resolving to these exact
 bytes no matter what `master` does later.
+
+The schema itself has not changed since `474750a1` ("Mark images in Service
+Alerts as final", #651). The pin names a repository revision, and the
+revisions between that commit and this one touched only the prose reference.
 
 ## Re-verifying
 
@@ -41,7 +45,7 @@ sha256sum crates/gtfs_validator_rt/proto/gtfs-realtime.proto
 To confirm the copy still matches upstream at the pinned commit:
 
 ```bash
-SHA=474750a163088673df718838d4a1bb093391f9af
+SHA=262ae1e46e3f66099284fb8e4f976dfec788501f
 curl -fsSL "https://raw.githubusercontent.com/google/transit/$SHA/gtfs-realtime/proto/gtfs-realtime.proto" \
   | diff - crates/gtfs_validator_rt/proto/gtfs-realtime.proto && echo "matches upstream"
 ```
@@ -56,7 +60,7 @@ in the same repository at the same commit. It is pinned in
 it, and a second copy of a long prose document would only drift.
 
 Read it at the pinned revision:
-<https://github.com/google/transit/blob/474750a163088673df718838d4a1bb093391f9af/gtfs-realtime/spec/en/reference.md>
+<https://github.com/google/transit/blob/262ae1e46e3f66099284fb8e4f976dfec788501f/gtfs-realtime/spec/en/reference.md>
 
 ## Updating
 

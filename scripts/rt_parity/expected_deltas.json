@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "javaCommit": "7041fa3fcaf674bf730e17325c179d329cdff6f2",
+    "javaJarSha256": "31b31b4b5f2d18562f5dcdd6dc407e4c1f1c9c07a9b63de65f0d37492a363ae8",
+    "rtSchemaCommit": "474750a163088673df718838d4a1bb093391f9af"
+  },
+  "deltas": [
+    {
+      "id": "proto2-required-not-enforced",
+      "status": "proposed",
+      "blockedOn": "GTF-11 question 10",
+      "canonicalRuleId": null,
+      "noticeCode": null,
+      "fixture": "decoder fixtures empty, missing_required_header, missing_required_version, missing_required_nested_trip",
+      "javaResult": "InvalidProtocolBufferException: Message missing required fields. The message is rejected and no rule runs.",
+      "rustResult": "Decodes successfully. The required field holds its default, and absence is indistinguishable from an empty value because prost generates required fields as non-Option.",
+      "reason": "prost does not implement proto2 required-field enforcement. The divergence is in the decoder, not in a rule, so it cannot be removed by changing rule logic: GTFS Guru must either add explicit presence rules, or reproduce Java's rejection before decoding.",
+      "specReference": "gtfs-realtime.proto: required FeedMessage.header, FeedHeader.gtfs_realtime_version, FeedEntity.id, TripUpdate.trip. Protocol Buffers 2 language guide, required fields.",
+      "expected": {
+        "java": "decode rejected, 0 notices",
+        "rust": "decode accepted, notice count depends on the answer to question 10"
+      },
+      "removalCondition": "prost gains required-field enforcement, or GTFS Guru adds a pre-decode presence check that reproduces the canonical rejection, or the canonical baseline moves to bindings that no longer reject.",
+      "recordedAt": "2026-09-10",
+      "evidence": "crates/gtfs_validator_rt/tests/decoder.rs, scripts/rt_parity/decoder_java_check.java"
+    },
+    {
+      "id": "unknown-enum-present-versus-absent",
+      "status": "proposed",
+      "blockedOn": "GTF-11 question 11",
+      "canonicalRuleId": null,
+      "noticeCode": null,
+      "fixture": "decoder fixture unknown_enum (FeedHeader.incrementality = 99)",
+      "javaResult": "hasIncrementality() is false. proto2 moves an unrecognised enum value into the unknown-field set, so the field reads as absent and its raw value is preserved only in that set.",
+      "rustResult": "incrementality is Some(99). prost generates the field as Option<i32> rather than an enum, so the field reads as present with an invalid value.",
+      "reason": "The two decoders disagree about what an unrecognised enum value means, not about the bytes. Any rule over an enum field must choose a reading; the choice changes both which notice fires and whether a presence check passes.",
+      "specReference": "gtfs-realtime/spec/en/reference.md, Incrementality. Protocol Buffers 2 language guide, unknown enum values in proto2.",
+      "expected": {
+        "java": "field absent; a presence check over incrementality passes",
+        "rust": "field present with value 99; an enum-validity check can fire"
+      },
+      "removalCondition": "The rule matrix selects no rule that reads an enum field's presence or validity, or the two readings are reconciled by normalising unknown enum values to absent before rules run.",
+      "recordedAt": "2026-09-10",
+      "evidence": "crates/gtfs_validator_rt/tests/decoder.rs, scripts/rt_parity/decoder_java_check.java"
+    }
+  ]
+}

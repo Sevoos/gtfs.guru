@@ -2,6 +2,7 @@
 members = [
   "crates/gtfs_model",
   "crates/gtfs_validator_core",
+  "crates/gtfs_validator_rt",
   "crates/gtfs_validator_report",
   "crates/gtfs_validator_profile",
   "crates/gtfs_validator_cli",
@@ -18,6 +19,7 @@ members = [
 default-members = [
   "crates/gtfs_model",
   "crates/gtfs_validator_core",
+  "crates/gtfs_validator_rt",
   "crates/gtfs_validator_report",
   "crates/gtfs_validator_profile",
   "crates/gtfs_validator_cli",

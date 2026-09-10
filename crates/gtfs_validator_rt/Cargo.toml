@@ -1,0 +1,51 @@
+[package]
+name = "gtfs-guru-rt"
+version = "1.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "GTFS-Realtime validation for GTFS Guru"
+repository = "https://github.com/abasis-ltd/gtfs.guru"
+homepage = "https://github.com/abasis-ltd/gtfs.guru"
+readme = "README.md"
+keywords = ["gtfs", "gtfs-realtime", "transit", "validator", "protobuf"]
+categories = ["parsing"]
+
+# The vendored schema and its provenance are build inputs, so they must ship in
+# the published package; `cargo package` would otherwise omit the non-source
+# files and the build script would fail on a fresh download.
+include = [
+  "src/**/*.rs",
+  "build.rs",
+  "proto/gtfs-realtime.proto",
+  "proto/UPSTREAM.md",
+  "spec_baseline.json",
+  "README.md",
+]
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+prost = "0.14.4"
+rustc-hash = "2.1"
+sha2 = "0.10"
+
+[dependencies.gtfs-guru-core]
+path = "../gtfs_validator_core"
+version = "1.0.0"
+default-features = false
+
+[dependencies.gtfs-guru-model]
+path = "../gtfs_model"
+version = "1.0.0"
+
+[build-dependencies]
+prost-build = "0.14.4"
+protox = "0.9.1"
+
+[features]
+default = ["parallel"]
+parallel = ["gtfs-guru-core/parallel"]

@@ -1,0 +1,34 @@
+{
+  "specRevision": {
+    "repository": "google/transit",
+    "ref": "master",
+    "commit": "474750a163088673df718838d4a1bb093391f9af",
+    "committedAt": "2026-08-17T19:50:33Z",
+    "specPaths": [
+      "gtfs-realtime/proto/gtfs-realtime.proto",
+      "gtfs-realtime/spec/en/reference.md"
+    ]
+  },
+  "vendoredSchema": {
+    "path": "proto/gtfs-realtime.proto",
+    "sha256": "8feff2c5499e0ff08777e203e49ef702e07be0a8376b8bb2126add311a709299",
+    "sizeBytes": 65237,
+    "sourceUrl": "https://raw.githubusercontent.com/google/transit/474750a163088673df718838d4a1bb093391f9af/gtfs-realtime/proto/gtfs-realtime.proto",
+    "license": "Apache-2.0",
+    "licenseHolder": "The GTFS Specifications Authors"
+  },
+  "canonicalBaseline": {
+    "repository": "MobilityData/gtfs-realtime-validator",
+    "ref": "master",
+    "commit": "7041fa3fcaf674bf730e17325c179d329cdff6f2",
+    "committedAt": "2026-04-14T16:03:07Z",
+    "bindings": "com.google.transit:gtfs-realtime-bindings:0.0.4",
+    "rulesAsset": "RULES.md",
+    "jarSha256": "31b31b4b5f2d18562f5dcdd6dc407e4c1f1c9c07a9b63de65f0d37492a363ae8",
+    "jarArtifact": "gtfs-realtime-validator-lib-1.0.0-SNAPSHOT-withAllDependencies.jar",
+    "jarBuiltAt": "2026-09-09",
+    "jarReproducibleFromCommit": false,
+    "bindingsVerifiedInJar": "0.0.4"
+  },
+  "updatedAt": "2026-09-09T00:00:00Z"
+}

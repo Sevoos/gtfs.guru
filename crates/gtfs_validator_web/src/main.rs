@@ -150,6 +150,11 @@ struct PubsubMessage {
 #[derive(Debug, Serialize)]
 struct VersionResponse {
     version: String,
+    /// The commit the binary was built from, when the build stamped one
+    /// (`GTFS_GURU_BUILD_COMMIT`, set by the Dockerfile). The web deploy reads
+    /// it back from the live site to confirm the swap actually happened.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    commit: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -486,6 +491,9 @@ fn not_found() -> Response {
 async fn version() -> Json<VersionResponse> {
     Json(VersionResponse {
         version: env!("CARGO_PKG_VERSION").to_string(),
+        commit: std::env::var("GTFS_GURU_BUILD_COMMIT")
+            .ok()
+            .filter(|commit| !commit.is_empty()),
     })
 }
 

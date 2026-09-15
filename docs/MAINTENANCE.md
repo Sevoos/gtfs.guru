@@ -73,28 +73,68 @@ You are safe! Click **"Squash and merge"**.
 
 ## Deploying the Website (gtfs.guru)
 
-The live site **does not run on GitHub Pages**, and **merging to `main` does NOT update it.** The `Website` workflow only checks the static assets; the site is published by the `deploy-website` job in `release.yml`, which runs on a `v*` tag.
+The live site **does not run on GitHub Pages** and is **not tied to a release
+tag**. It is the `gtfs-guru-web` service (`crates/gtfs_validator_web`) with
+`website/` embedded into the binary via
+`include_dir!("$CARGO_MANIFEST_DIR/../../website")`, running as a Docker
+container on the Hetzner VPS (`157.90.246.102`). Caddy on the host terminates
+TLS for `gtfs.guru` and proxies to that container on `localhost:8080`. There is
+no nginx and no directory of static files that Caddy serves directly: copying
+`website/` to the server changes nothing until a new image is built and the
+container is replaced.
 
-**Actual hosting:** a VPS at Hetzner Cloud (`157.90.246.102`), where Caddy terminates TLS and proxies to nginx serving static files.
+**How it ships:** the `Deploy Web` workflow (`.github/workflows/deploy-web.yml`)
+runs on every push to `main` that touches `website/`,
+`crates/gtfs_validator_web/`, `crates/gtfs_validator_wasm/`, the `Dockerfile`
+or the deploy script itself, and on demand via *Run workflow*. It
 
-**Deploy path:**
+1. builds the image with `GIT_SHA` baked in, so `GET /version` reports
+   `{"version": ..., "commit": "<sha>"}`;
+2. streams it to the server over ssh (`docker save | zstd | ssh docker load`,
+   no registry involved);
+3. runs `deploy/swap-web-container.sh` there, which starts the new image with
+   the running container's ports, env and volumes, waits for `/version` to
+   report the new commit, and puts the previous image back if it does not;
+4. checks `https://gtfs.guru/version` for that commit and runs the Playwright
+   smoke test (`npm run test:live-website`).
+
+Anything that only changes the validator core is *not* picked up by the path
+filter; trigger the workflow manually, or refresh `website/pkg` with
+`./scripts/build-wasm.sh` and commit it, which also updates the in-browser
+validator.
+
+**Manual path** (needs ssh as `botuser`): build the image locally for
+`linux/amd64`, ship it the same way, and run the swap script:
 
 ```bash
-# 1. Rebuild the WASM validator (needs wasm-pack + binaryen).
-#    This refreshes website/pkg/ and website/pkg-mt/ in place.
-./scripts/build-wasm.sh
-
-# 2. Push static files to the server (needs SSH access)
-./scripts/deploy-website.sh <server-ip-or-hostname>
+docker build --platform linux/amd64 --build-arg GIT_SHA=$(git rev-parse HEAD) -t gtfs-validator-web:$(git rev-parse --short HEAD) .
+docker save gtfs-validator-web:$(git rev-parse --short HEAD) | zstd | ssh botuser@157.90.246.102 'zstd -d | docker load'
+ssh botuser@157.90.246.102 "bash -s -- gtfs-validator-web:$(git rev-parse --short HEAD) $(git rev-parse HEAD)" < deploy/swap-web-container.sh
 ```
 
 Notes:
 
-* The repo-root `website/` is the **single copy** of the site. nginx serves it directly, and `gtfs-guru-web` embeds it via `include_dir!("$CARGO_MANIFEST_DIR/../../website")`. That embed is why `gtfs-guru-web` is `publish = false`: `cargo package` cannot carry a directory from outside the crate root, and the crate is a deployed binary rather than a library anyone depends on.
-* The example feed behind the "Try an example feed" button is generated, not hand-edited. Change `scripts/build_demo_feed.py` and re-run it (`python3 scripts/build_demo_feed.py`); `--check` is what CI runs.
-* Notice documentation is generated from the Rust schema and `src/notice_guides.json`. Run `cargo run -p gtfs-guru-web --bin generate-notice-pages` after changing a notice or guide. The same command writes `website/compatibility/`, `website/sitemap.xml` and `docs/rules.md`; CI runs it with `-- --check` and fails when the committed output is stale. Refresh the bundled MobilityData snapshot with `python3 scripts/update_notice_metadata.py`; normal builds never require network access.
-* `deploy/update.sh` rebuilds the Docker (axum) stack — that is **not** what serves the live domain.
-* Server-level config (headers, TLS, caching) lives in `Caddyfile` and `website/nginx.conf` — since we control the server, custom headers (e.g. COOP/COEP for multithreaded WASM) can be set there.
+* The repo-root `website/` is the **single copy** of the site. `gtfs-guru-web`
+  embeds it, which is why the crate is `publish = false`: `cargo package`
+  cannot carry a directory from outside the crate root, and the crate is a
+  deployed binary rather than a library anyone depends on.
+* `docker-compose.yml` is the local/self-hosting stack. Production does not use
+  it; the container was started with `docker run`, and the swap script
+  preserves whatever it was started with. `deploy/update.sh` rebuilds the
+  compose stack and is **not** what serves the live domain.
+* The example feed behind the "Try an example feed" button is generated, not
+  hand-edited. Change `scripts/build_demo_feed.py` and re-run it
+  (`python3 scripts/build_demo_feed.py`); `--check` is what CI runs.
+* Notice documentation is generated from the Rust schema and
+  `src/notice_guides.json`. Run `cargo run -p gtfs-guru-web --bin generate-notice-pages`
+  after changing a notice or guide. The same command writes
+  `website/compatibility/`, `website/sitemap.xml` and `docs/rules.md`; CI runs
+  it with `-- --check` and fails when the committed output is stale. Refresh the
+  bundled MobilityData snapshot with `python3 scripts/update_notice_metadata.py`;
+  normal builds never require network access.
+* Server-level config (headers, TLS, caching) lives in the host's
+  `/etc/caddy/Caddyfile` (root-owned; the repo `Caddyfile` is the compose
+  variant). COOP/COEP for multithreaded WASM are set there.
 
 ---
 
@@ -121,15 +161,15 @@ The tag workflow verifies version consistency before it does any build. It then:
 
 * builds desktop installers and CLI archives for macOS, Linux, and Windows;
 * creates the GitHub Release and updater manifest;
-* publishes the Rust crates, Python wheel, and npm package;
-* rebuilds both WASM tiers and synchronizes the static website to Hetzner;
-* verifies that `https://gtfs.guru/pkg/package.json` reports the tag version.
+* publishes the Rust crates, Python wheel, and npm package.
+
+The website is not part of the tag: see
+[Deploying the Website](#deploying-the-website-gtfsguru).
 
 Required release secrets are `CARGO_REGISTRY_TOKEN`, `PYPI_API_TOKEN`,
-`NPM_TOKEN`, the Tauri/Apple signing secrets, `HETZNER_HOST`,
-`HETZNER_SSH_KEY`, and `HETZNER_KNOWN_HOSTS`. `HETZNER_USER` defaults to
-`botuser`; `HETZNER_PATH` defaults to `gtfs-guru-web/` in that user's home.
+`NPM_TOKEN` and the Tauri/Apple signing secrets. The web deploy uses
+`HETZNER_HOST`, `HETZNER_SSH_KEY`, `HETZNER_KNOWN_HOSTS` and (optionally)
+`HETZNER_USER`, default `botuser`.
 
 The known-hosts value must be provisioned out of band (for example from a
-trusted existing SSH connection). The workflow deliberately does not use
-`ssh-keyscan` at release time.
+trusted existing SSH connection). Neither workflow uses `ssh-keyscan`.

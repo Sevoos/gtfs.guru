@@ -34,14 +34,21 @@ and this project follows [Semantic Versioning](https://semver.org/).
   several caseless tokens, lengths count UTF-16 units, and the notice is held
   back on rows whose fields failed to parse, as Java's entity validators never
   see those rows.
+- Shape-to-stop matching uses an operation-for-operation port of
+  `S2EdgeUtil.getClosestPoint`, `S2LatLng` and `S2LatLng.getDistance`, so
+  near-ties on degenerate shapes (a polyline jittering between two points
+  centimetres apart, or repeated points) resolve the way the canonical
+  validator resolves them. Thailand (mdb-1831) `stop_has_too_many_matches_for_shape`
+  goes from 57 to Java's 63 and `stops_match_shape_out_of_order` from 75 to 71
+  against 72; the last pair differs in the final ulp of a trig call.
 
 ### Added
 
 - `scripts/mdb_parity.py`: the mdb-50 catalogue parity check. Fifty
   MobilityDatabase feeds pinned in `scripts/real_world/mdb50.json`, both
   validators on the same zips, a per-feed diff classified against
-  `expected_deltas.json` and `mdb50_expected_deltas.json`. 49 of 50 feeds are
-  exact-on-shared; see `docs/real-world-parity.md`.
+  `expected_deltas.json` and `mdb50_expected_deltas.json`. 46 of 50 feeds are
+  exact and 50 of 50 exact-on-shared; see `docs/real-world-parity.md`.
 
 ## [1.0.0] - 2026-09-15
 

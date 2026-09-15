@@ -41,6 +41,16 @@
       "triaged": true,
       "added": "2026-09-15",
       "reason": "Triaged 2026-09-15 (canon parity). feed_info.txt row 2 has neither feed_contact_email nor feed_contact_url. Java drops that row before validation because feed_publisher_url is empty (the feed's single missing_required_field, reported by both validators), so FeedContactValidator sees an empty table and stays silent. gtfs.guru keeps rows with field-level errors. Same mechanism as mdb-3234 in expected_deltas.json. Kept: the contact fields really are missing."
+    },
+    {
+      "feed_id": "mdb-1831",
+      "code": "stops_match_shape_out_of_order",
+      "severity": "WARNING",
+      "java_total": 72,
+      "guru_total": 71,
+      "triaged": true,
+      "added": "2026-09-15",
+      "reason": "Triaged 2026-09-15 (canon parity). The one pair Java reports and gtfs.guru does not is trip 3467, stops 11797 and 4090 on shape 952: both stops match the same shape vertex (13.758416, 100.616676), so their positions along the shape differ only by the rounding of one segment length (haversine on the vertex against the S2Point angle to the match). The matcher is now an operation-for-operation port of S2EdgeUtil.getClosestPoint and S2LatLng.getDistance, but that last rounding comes from sin/cos/asin/atan2 themselves, which are HotSpot's fdlibm on the JVM and Apple's libm here and differ in the last ulp. Every other shape-matching notice on this feed (63 stop_has_too_many_matches_for_shape, the other 71 out-of-order pairs) agrees. Kept as a known ulp-level difference."
     }
   ]
 }

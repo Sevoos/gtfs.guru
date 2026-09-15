@@ -644,7 +644,6 @@ fn build_service_schedules(feed: &GtfsFeed) -> HashMap<StringId, ServiceSchedule
             continue;
         }
         let schedule = schedules.entry(trip.service_id).or_default();
-        schedule.trips += 1;
         let mut trip_first = None;
         let mut trip_last = None;
         if let Some(indices) = feed.stop_times_by_trip.get(&trip.trip_id) {
@@ -664,31 +663,60 @@ fn build_service_schedules(feed: &GtfsFeed) -> HashMap<StringId, ServiceSchedule
             }
         }
         if let Some(frequencies) = frequencies_by_trip.get(&trip.trip_id) {
+            // A frequency-based trip row stands for a whole series of runs, not
+            // for one. Counting the row once under-reported the day, and taking
+            // `end_time + duration` as the last arrival ran past the end of
+            // service: `end_time` bounds the last *departure*, exclusively.
             let trip_duration = match (trip_first, trip_last) {
                 (Some(first), Some(last)) => last.saturating_sub(first).max(0),
                 _ => 0,
             };
             for frequency in frequencies {
+                let (departures, last_departure) = frequency_departures(frequency);
+                schedule.trips += departures;
                 min_assign(
                     &mut schedule.first_departure,
                     Some(frequency.start_time.total_seconds()),
                 );
                 max_assign(
                     &mut schedule.last_arrival,
-                    Some(
-                        frequency
-                            .end_time
-                            .total_seconds()
-                            .saturating_add(trip_duration),
-                    ),
+                    Some(last_departure.saturating_add(trip_duration)),
                 );
             }
         } else {
+            schedule.trips += 1;
             min_assign(&mut schedule.first_departure, trip_first);
             max_assign(&mut schedule.last_arrival, trip_last);
         }
     }
     schedules
+}
+
+/// How many runs one `frequencies.txt` window produces, and when the last one
+/// departs. Departures start at `start_time` and repeat every `headway_secs`
+/// while still before `end_time`, which is the end of the window rather than a
+/// departure itself. This is the same count the date-trips rule reports, so a
+/// feed's profile and its notices agree.
+///
+/// `exact_times` does not change the arithmetic: for `1` these are the exact
+/// departure times, for `0` the same window is served at approximately that
+/// headway, so the count and the span are the schedule's own estimate.
+fn frequency_departures(frequency: &gtfs_guru_model::Frequency) -> (usize, i32) {
+    let start = frequency.start_time.total_seconds();
+    let end = frequency.end_time.total_seconds();
+    if frequency.headway_secs == 0 {
+        return (1, start);
+    }
+    let headway = frequency.headway_secs as i32;
+    let span = end.saturating_sub(start);
+    if span <= 0 {
+        return (1, start);
+    }
+    let intervals = (span - 1) / headway;
+    (
+        intervals as usize + 1,
+        start.saturating_add(intervals.saturating_mul(headway)),
+    )
 }
 
 fn min_assign(target: &mut Option<i32>, candidate: Option<i32>) {
@@ -811,7 +839,8 @@ mod tests {
     use super::*;
     use gtfs_guru_core::{CsvTable, StringPool, ValidationNotice};
     use gtfs_guru_model::{
-        Agency, Calendar, CalendarDate, Frequency, GtfsTime, Route, Stop, StopTime, Trip,
+        Agency, Calendar, CalendarDate, ExactTimes, Frequency, GtfsTime, Route, Stop, StopTime,
+        Trip,
     };
 
     #[test]
@@ -901,9 +930,58 @@ mod tests {
             profile.service.days[0].first_departure.as_deref(),
             Some("05:00:00")
         );
+        // 05:00 plus 19 whole headways is the last departure inside the window;
+        // the hour-long trip lands at 10:45, not at end_time plus an hour.
         assert_eq!(
             profile.service.days[0].last_arrival.as_deref(),
-            Some("11:00:00")
+            Some("10:45:00")
+        );
+        assert_eq!(profile.service.days[0].trips, 20);
+    }
+
+    #[test]
+    fn exact_frequency_windows_count_every_departure() {
+        let mut feed = sample_feed();
+        let weekday_trip = feed.pool.intern("weekday-trip");
+        for stop_time in &mut feed.stop_times.rows {
+            if stop_time.trip_id == weekday_trip {
+                let offset = if stop_time.stop_sequence == 1 {
+                    0
+                } else {
+                    1200
+                };
+                stop_time.arrival_time = Some(GtfsTime::from_seconds(8 * 3600 + offset));
+                stop_time.departure_time = Some(GtfsTime::from_seconds(8 * 3600 + offset));
+            }
+        }
+        feed.frequencies = Some(CsvTable {
+            rows: vec![Frequency {
+                trip_id: weekday_trip,
+                start_time: GtfsTime::from_seconds(8 * 3600),
+                end_time: GtfsTime::from_seconds(8 * 3600 + 3599),
+                headway_secs: 600,
+                exact_times: Some(ExactTimes::ExactTimes),
+            }],
+            ..CsvTable::default()
+        });
+        feed.rebuild_stop_times_index();
+
+        let profile = FeedProfile::build(
+            &feed,
+            &NoticeContainer::new(),
+            NaiveDate::from_ymd_opt(2026, 7, 27).unwrap(),
+        );
+
+        // Departures at 08:00 .. 08:50 every ten minutes: six runs of a
+        // twenty-minute trip, the last arriving at 09:10.
+        assert_eq!(profile.service.days[0].trips, 6);
+        assert_eq!(
+            profile.service.days[0].first_departure.as_deref(),
+            Some("08:00:00")
+        );
+        assert_eq!(
+            profile.service.days[0].last_arrival.as_deref(),
+            Some("09:10:00")
         );
     }
 

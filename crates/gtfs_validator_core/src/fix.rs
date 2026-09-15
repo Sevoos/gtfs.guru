@@ -288,6 +288,8 @@ pub enum FixError {
     OutputSameAsInput(PathBuf),
     #[error("output path already exists: {0}")]
     OutputExists(PathBuf),
+    #[error("refusing to write fixes inside the input feed directory: {0}")]
+    OutputInsideInput(PathBuf),
     #[error("io error for {path}: {source}")]
     Io {
         path: PathBuf,
@@ -336,6 +338,15 @@ pub fn apply_fixes(
     if output.exists() {
         return Err(FixError::OutputExists(output.to_path_buf()));
     }
+    // A new subdirectory of the input passes both checks above, and then
+    // `copy_tree` walks straight into the output it just created and copies the
+    // feed into itself until the filesystem stops it -- leaving nested copies
+    // behind inside the user's feed. Refuse before anything is created.
+    if matches!(input.source(), GtfsInputSource::Directory)
+        && resolve_existing_prefix(output).starts_with(resolve_existing_prefix(input.path()))
+    {
+        return Err(FixError::OutputInsideInput(output.to_path_buf()));
+    }
 
     match input.source() {
         GtfsInputSource::Zip => apply_to_zip(input, plan, output),
@@ -346,28 +357,31 @@ pub fn apply_fixes(
 /// Compare paths without requiring `output` to exist: canonicalize the deepest
 /// existing ancestor of each and compare the remainder textually.
 fn resolves_to_same_path(input: &Path, output: &Path) -> bool {
-    fn resolve(path: &Path) -> PathBuf {
-        let mut suffix = Vec::new();
-        let mut current = path;
-        loop {
-            if let Ok(canonical) = current.canonicalize() {
-                let mut resolved = canonical;
-                for part in suffix.iter().rev() {
-                    resolved.push(part);
-                }
-                return resolved;
+    resolve_existing_prefix(input) == resolve_existing_prefix(output)
+}
+
+/// Canonicalize the deepest existing ancestor of `path` and re-append the
+/// components that do not exist yet, so symlinks and `..` are resolved for a
+/// path that has not been created.
+fn resolve_existing_prefix(path: &Path) -> PathBuf {
+    let mut suffix = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(canonical) = current.canonicalize() {
+            let mut resolved = canonical;
+            for part in suffix.iter().rev() {
+                resolved.push(part);
             }
-            match (current.parent(), current.file_name()) {
-                (Some(parent), Some(name)) => {
-                    suffix.push(name.to_os_string());
-                    current = parent;
-                }
-                _ => return path.to_path_buf(),
+            return resolved;
+        }
+        match (current.parent(), current.file_name()) {
+            (Some(parent), Some(name)) => {
+                suffix.push(name.to_os_string());
+                current = parent;
             }
+            _ => return path.to_path_buf(),
         }
     }
-
-    resolve(input) == resolve(output)
 }
 
 /// Rewrite every touched file up front, so a plan that cannot be applied fails
@@ -1486,6 +1500,33 @@ mod tests {
         let indirect = dir.join(".").join("..").join(dir.file_name().unwrap());
         let err = apply_fixes(&input, &plan, &indirect).expect_err("must refuse");
         assert!(matches!(err, FixError::OutputSameAsInput(_)));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn refuses_an_output_inside_the_input_directory() {
+        let dir = temp_path("gtfs_fix_nested");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        std::fs::write(dir.join("agency.txt"), b"agency_id\n1\n").expect("write");
+
+        let input = GtfsInput::from_path(&dir).expect("input");
+        let plan = FixPlan::default();
+        for output in [
+            dir.join("repaired"),
+            dir.join("nested").join("repaired"),
+            dir.join(".").join("repaired"),
+        ] {
+            let err = apply_fixes(&input, &plan, &output).expect_err("must refuse");
+            assert!(matches!(err, FixError::OutputInsideInput(_)), "{:?}", err);
+            // The refusal must not leave anything behind in the feed.
+            assert!(!output.exists());
+        }
+        let entries: Vec<_> = std::fs::read_dir(&dir)
+            .expect("read dir")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect();
+        assert_eq!(entries, vec![std::ffi::OsString::from("agency.txt")]);
 
         std::fs::remove_dir_all(&dir).ok();
     }

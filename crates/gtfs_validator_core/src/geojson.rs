@@ -244,7 +244,8 @@ impl LocationsGeoJson {
                     "MultiPolygon" => {
                         if let Some(coords) = geometry.coordinates.as_ref() {
                             let signature = coords.to_string();
-                            if !seen_geometries.insert(signature.clone()) {
+                            if !seen_geometries.insert(signature.clone()) && thorough_mode_enabled()
+                            {
                                 notices.push(geojson_duplicated_element_notice(&signature));
                             }
                             match points_from_multipolygon(coords) {
@@ -750,5 +751,45 @@ mod tests {
         assert!(!locations.location_ids.contains(&pool.intern("L2")));
         assert_eq!(locations.location_ids.len(), 2);
         assert!(locations.bounds_by_id.contains_key(&pool.intern("42")));
+    }
+
+    #[test]
+    fn repeated_multipolygon_is_only_a_duplicate_in_thorough_mode() {
+        let json = r#"{
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "id": "A",
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "MultiPolygon",
+                        "coordinates": [[[[0,0],[2,0],[2,2],[0,2],[0,0]]]]
+                    },
+                    "properties": {}
+                },
+                {
+                    "id": "B",
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "MultiPolygon",
+                        "coordinates": [[[[0,0],[2,0],[2,2],[0,2],[0,0]]]]
+                    },
+                    "properties": {}
+                }
+            ]
+        }"#;
+        let count = || {
+            let collection: GeoJsonFeatureCollection = serde_json::from_str(json).expect("parse");
+            let pool = crate::string_pool::StringPool::default();
+            LocationsGeoJson::new(collection, &pool)
+                .notices
+                .iter()
+                .filter(|notice| notice.code == "geo_json_duplicated_element")
+                .count()
+        };
+
+        assert_eq!(count(), 0, "default mode follows the canonical validator");
+        let _thorough = crate::validation_context::set_thorough_mode_enabled(true);
+        assert_eq!(count(), 1, "thorough mode keeps the geometry check");
     }
 }

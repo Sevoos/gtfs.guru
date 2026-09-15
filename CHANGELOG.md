@@ -42,6 +42,24 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `stop_times.txt` references to `pickup_booking_rule_id` and
+  `drop_off_booking_rule_id` are now checked when `booking_rules.txt` is
+  absent, so every such reference is a `foreign_key_violation`, as the
+  canonical validator reports. The check used to be skipped entirely without
+  the file, which hid 50,631 dangling references on one real-world feed
+  (GTF-33).
+- `fare_products.txt` rows are keyed on the specification's primary key,
+  `(fare_product_id, rider_category_id, fare_media_id)`, so a product sold to
+  several rider categories is no longer a `duplicate_key`. Thorough mode keeps
+  the stricter globally unique `fare_product_id` (GTF-34).
+- `geo_json_duplicated_element` for repeated MultiPolygon geometries is now
+  reported only under `--thorough`, matching the Polygon case. The canonical
+  validator uses that code for duplicated JSON keys, so the default profile
+  no longer emits it for geometry (GTF-34).
+- The four remaining real-world parity differences on `mdb-3234` and
+  `mdb-502` are recorded as reviewed in `scripts/real_world/expected_deltas.json`
+  with the evidence for keeping each one (GTF-34, GTF-35).
+
 - The demo feed archive is stored rather than deflated, so
   `scripts/build_demo_feed.py --check` agrees with the committed copy on every
   machine. Deflate output is only stable for a given zlib implementation, so a

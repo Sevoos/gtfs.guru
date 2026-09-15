@@ -251,7 +251,6 @@ impl Validator for ReferentialIntegrityValidator {
         } else {
             HashSet::new()
         };
-        let has_booking_rules = booking_rules_ok && feed.booking_rules.is_some();
 
         let fare_ids: HashSet<gtfs_guru_model::StringId> = if fare_attributes_ok {
             feed.fare_attributes
@@ -362,7 +361,10 @@ impl Validator for ReferentialIntegrityValidator {
                         }
                     }
                 }
-                if has_booking_rules {
+                // The canonical validator checks these against whatever
+                // booking_rules.txt holds, and an absent file holds nothing:
+                // every reference is then dangling, not exempt.
+                if booking_rules_ok {
                     if let Some(booking_rule_id) =
                         stop_time.pickup_booking_rule_id.filter(|id| id.0 != 0)
                     {
@@ -1355,6 +1357,91 @@ mod tests {
                 .as_str()
                 .unwrap(),
             "route_id"
+        );
+    }
+
+    #[test]
+    fn booking_rule_references_dangle_when_booking_rules_file_is_absent() {
+        let mut feed = GtfsFeed::default();
+        feed.trips = CsvTable {
+            headers: vec!["trip_id".into()],
+            rows: vec![Trip {
+                trip_id: feed.pool.intern("T1"),
+                ..Default::default()
+            }],
+            row_numbers: vec![2],
+        };
+        feed.stops = CsvTable {
+            headers: vec!["stop_id".into()],
+            rows: vec![Stop {
+                stop_id: feed.pool.intern("S1"),
+                ..Default::default()
+            }],
+            row_numbers: vec![2],
+        };
+        feed.stop_times = CsvTable {
+            headers: vec![
+                "trip_id".into(),
+                "stop_id".into(),
+                "pickup_booking_rule_id".into(),
+                "drop_off_booking_rule_id".into(),
+            ],
+            rows: vec![
+                StopTime {
+                    trip_id: feed.pool.intern("T1"),
+                    stop_id: feed.pool.intern("S1"),
+                    pickup_booking_rule_id: Some(feed.pool.intern("BR1")),
+                    drop_off_booking_rule_id: Some(feed.pool.intern("BR2")),
+                    ..Default::default()
+                },
+                StopTime {
+                    trip_id: feed.pool.intern("T1"),
+                    stop_id: feed.pool.intern("S1"),
+                    pickup_booking_rule_id: Some(feed.pool.intern("BR1")),
+                    ..Default::default()
+                },
+            ],
+            row_numbers: vec![2, 3],
+        };
+        feed.booking_rules = None;
+        feed.table_statuses
+            .insert(BOOKING_RULES_FILE, TableStatus::MissingFile);
+
+        let mut notices = NoticeContainer::new();
+        ReferentialIntegrityValidator.validate(&feed, &mut notices);
+
+        let mut refs: Vec<(u64, String, String)> = notices
+            .iter()
+            .map(|notice| {
+                assert_eq!(notice.code, CODE_FOREIGN_KEY_VIOLATION);
+                assert_eq!(notice.severity, NoticeSeverity::Error);
+                let field = |key: &str| {
+                    notice
+                        .context
+                        .get(key)
+                        .unwrap()
+                        .as_str()
+                        .unwrap()
+                        .to_string()
+                };
+                assert_eq!(field("childFilename"), STOP_TIMES_FILE);
+                assert_eq!(field("parentFilename"), BOOKING_RULES_FILE);
+                assert_eq!(field("parentFieldName"), "booking_rule_id");
+                (
+                    notice.row.expect("row number"),
+                    field("childFieldName"),
+                    field("fieldValue"),
+                )
+            })
+            .collect();
+        refs.sort();
+        assert_eq!(
+            refs,
+            vec![
+                (2, "drop_off_booking_rule_id".into(), "BR2".into()),
+                (2, "pickup_booking_rule_id".into(), "BR1".into()),
+                (3, "pickup_booking_rule_id".into(), "BR1".into()),
+            ]
         );
     }
 

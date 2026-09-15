@@ -267,6 +267,9 @@ fn merge_field_type(fields: &mut BTreeMap<String, String>, field: String, field_
             fields.insert(field, field_type);
         }
         Some(existing) if existing == &field_type => {}
+        // A bare `object` is the fallback for an expression the scan cannot
+        // type; it must not downgrade a type another site already pinned.
+        Some(_) if field_type == "object" => {}
         Some(_) => {
             fields.insert(field, "object".to_string());
         }
@@ -356,8 +359,11 @@ fn collect_rs_files(dir: &Path, files: &mut Vec<PathBuf>) {
         Ok(entries) => entries,
         Err(_) => return,
     };
-    for entry in entries.flatten() {
-        let path = entry.path();
+    // `read_dir` order is filesystem-specific (APFS sorts, ext4 does not), and
+    // the scan merges field types across files, so walk in a fixed order.
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
+    paths.sort();
+    for path in paths {
         if path.is_dir() {
             collect_rs_files(&path, files);
         } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs")

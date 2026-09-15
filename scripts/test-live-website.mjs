@@ -58,7 +58,7 @@ try {
     );
   }
 
-  await page.getByRole('button', { name: /try an example feed/i }).click();
+  await page.getByRole('button', { name: /validate an example feed/i }).click();
   await page.waitForFunction(
     () => {
       const result = document.querySelector('#result-state');
@@ -75,7 +75,11 @@ try {
     errorMessage: document.querySelector('#error-message')?.textContent?.trim() || '',
     errorCount: document.querySelector('#error-count')?.textContent?.trim() || '',
     warningCount: document.querySelector('#warning-count')?.textContent?.trim() || '',
-    mcpPreviewVisible: document.querySelector('#mcp-preview')?.classList.contains('is-ready') || false,
+    verdict: document.querySelector('#completion-text')?.textContent?.trim() || '',
+    verdictState: document.querySelector('#completion-indicator')?.className || '',
+    issueCards: document.querySelectorAll('#result-issues .issue-card').length,
+    firstIssueDocLink: document.querySelector('.issue-doc-link')?.getAttribute('href') || '',
+    mcpPreviewPresent: !!document.querySelector('#mcp-preview'),
     mcpExampleCount: document.querySelectorAll('.mcp-example').length,
     mcpVerdict: document.querySelector('.mcp-verdict')?.textContent?.trim() || '',
   }));
@@ -88,7 +92,30 @@ try {
   assert.equal(state.resultVisible, true, 'example-feed validation produced no result');
   assert.match(state.errorCount, /^\d+$/, 'the result has no numeric error count');
   assert.match(state.warningCount, /^\d+$/, 'the result has no numeric warning count');
-  assert.equal(state.mcpPreviewVisible, true, 'the MCP preview did not become visible');
+  // The example feed carries deliberate errors, so the verdict must say so.
+  // A green "scan complete" over a failing feed is the regression this guards.
+  assert.equal(
+    Number(state.errorCount) > 0,
+    true,
+    'the example feed is supposed to contain errors',
+  );
+  assert.match(
+    state.verdict,
+    /errors? need fixing/i,
+    `the verdict does not report the errors: ${state.verdict}`,
+  );
+  assert.match(
+    state.verdictState,
+    /state-error/,
+    `the verdict is not in its error state: ${state.verdictState}`,
+  );
+  assert.equal(state.issueCards > 0, true, 'the report listed no issues inline');
+  assert.match(
+    state.firstIssueDocLink,
+    /^\/notices\/[a-z0-9_]+\/$/,
+    `the first issue does not link to its notice page: ${state.firstIssueDocLink}`,
+  );
+  assert.equal(state.mcpPreviewPresent, true, 'the MCP preview is missing from the result');
   assert.equal(state.mcpExampleCount > 0, true, 'the demo feed produced no MCP error examples');
   assert.match(state.mcpVerdict, /I checked gtfs-guru-demo/);
   assert.deepEqual(pageErrors, [], `page errors: ${pageErrors.join('; ')}`);

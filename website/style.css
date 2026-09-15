@@ -166,9 +166,76 @@ a {
 
 .nav-links {
     display: flex;
-    /* Seven items now. At 2rem flat they shrank and each label wrapped inside
-       itself at 1024px, which put the whole bar on two lines. */
+    align-items: center;
+    /* Five items now that the reference pages sit under one Documentation
+       entry; the earlier eight shrank and wrapped inside themselves at 1024px. */
     gap: clamp(1rem, 1.9vw, 2rem);
+}
+
+/* --- Documentation dropdown ---------------------------------------------
+   A <details> rather than a scripted menu: focusable, toggles on Enter/Space
+   and still opens with JavaScript off. */
+.nav-dropdown {
+    position: relative;
+}
+
+.nav-dropdown > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    cursor: pointer;
+    list-style: none;
+}
+
+.nav-dropdown > summary::-webkit-details-marker {
+    display: none;
+}
+
+.nav-dropdown > summary::after {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+}
+
+.nav-dropdown[open] > summary::after {
+    transform: translateY(1px) rotate(225deg);
+}
+
+.nav-dropdown > summary:hover,
+.nav-dropdown[open] > summary {
+    color: var(--text-primary);
+}
+
+.nav-dropdown-panel {
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    left: 0;
+    min-width: 12rem;
+    display: flex;
+    flex-direction: column;
+    padding: 0.4rem 0;
+    /* Fully opaque: the bar's own blur pulls the hero's accent colours
+       through anything translucent and the labels lose contrast. */
+    background: #0b1220;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    z-index: 20;
+}
+
+.nav-dropdown-panel a {
+    padding: 0.5rem 0.9rem;
+}
+
+.nav-dropdown-panel a:hover {
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .nav-links a {
@@ -340,7 +407,9 @@ a {
 
 .hero-visual {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 2.5rem;
 }
 
 .hero-container > *,
@@ -393,15 +462,23 @@ h1 {
 .hero-actions {
     display: flex;
     gap: 1rem;
-    margin-bottom: 3rem;
+    /* The stats row used to follow here and needed the air. The validator card
+       follows now, and the hero grid already puts 3rem between them. */
+    margin-bottom: 0;
     flex-wrap: wrap;
 }
 
+/* Below the validator, not above it. These numbers are context for a reader
+   who has already seen what the tool does; in front of the file picker they
+   were a paragraph of stats between the promise and the product. */
 .stats-row {
     display: flex;
-    gap: 4rem;
+    gap: clamp(1.5rem, 5vw, 4rem);
+    flex-wrap: wrap;
     padding-top: 2rem;
     border-top: 1px solid var(--border);
+    width: 100%;
+    max-width: 940px;
 }
 
 .stat-item {
@@ -623,6 +700,13 @@ h1 {
     background: rgba(255, 255, 255, 0.02);
 }
 
+/* Keyboard focus lands on the button inside, so the whole zone lights up with
+   it — otherwise the focus ring reads as belonging to nothing in particular. */
+.upload-state:focus-within {
+    border-color: var(--accent-primary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
 .upload-icon {
     width: 48px;
     height: 48px;
@@ -631,7 +715,67 @@ h1 {
 }
 
 .upload-state h3 {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.75rem;
+}
+
+.upload-limit-note {
+    margin: 0.85rem 1rem 0;
+    max-width: 34ch;
+    text-align: center;
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+.upload-limit-note a {
+    color: var(--accent-primary);
+}
+
+/* --- URL input ----------------------------------------------------------
+   The placeholder used to be the only thing naming this field, so it vanished
+   the moment anyone typed. */
+.url-input-container {
+    margin-top: 1.25rem;
+    text-align: left;
+}
+
+.url-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.url-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+#url-input {
+    flex-grow: 1;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+}
+
+#url-analyze-btn {
+    padding: 0.6rem 1rem;
+    white-space: nowrap;
+}
+
+.url-hint {
+    margin: 0.5rem 0 0;
+    font-size: 0.76rem;
+    line-height: 1.5;
+}
+
+.url-hint a {
+    color: var(--accent-primary);
 }
 
 .sub-text {
@@ -867,9 +1011,56 @@ h1 {
 
 /* Section grounds alternate between the two darkest steps so the page has
    rhythm without any card sitting on a decorated background. */
+.checks-section,
 .download-section,
 #faq {
     background: var(--bg-elevated);
+}
+
+/* --- What the report checks ---------------------------------------------
+   Placed before the benchmark table: a first-time reader wants to know what
+   the tool looks at before they care how fast it looks at it. */
+.checks-section {
+    padding: 80px 0;
+}
+
+.checks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.25rem;
+}
+
+.check-card {
+    padding: 1.5rem;
+}
+
+.check-card h3 {
+    margin-bottom: 0.5rem;
+    font-size: 1.05rem;
+}
+
+.check-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.check-card code {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+}
+
+.checks-footnote {
+    margin: 2rem 0 0;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.checks-footnote a {
+    color: var(--accent-primary);
 }
 
 .section-header {
@@ -2015,7 +2206,8 @@ footer {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin-bottom: 2rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
     animation: fadeScale 0.5s ease-out;
 }
 
@@ -2024,16 +2216,193 @@ footer {
     margin-bottom: 0.5rem;
 }
 
+/* The icon colour is the first thing read off this panel, so it tracks the
+   counts rather than sitting on green. */
+.completion-indicator.state-error .completion-icon {
+    color: var(--error);
+}
+
+.completion-indicator.state-warning .completion-icon {
+    color: var(--warning);
+}
+
+.completion-indicator.state-clean .completion-icon {
+    color: var(--success);
+}
+
 .completion-icon svg {
-    width: 64px;
-    height: 64px;
+    width: 56px;
+    height: 56px;
 }
 
 .completion-text {
-    font-size: 1.2rem;
-    font-weight: 600;
+    font-size: 1.3rem;
+    font-weight: 650;
     color: var(--text-primary);
     letter-spacing: -0.02em;
+}
+
+.completion-sub {
+    margin-top: 0.35rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    max-width: 44ch;
+}
+
+/* --- Inline issue list ---------------------------------------------------
+   The findings are the product. They are rendered in the result panel, not
+   behind a "See More" button, and each card answers the four questions a
+   reader arrives with: what, where, why, and what to change. */
+.result-issues {
+    width: 100%;
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.result-issues.hidden {
+    display: none;
+}
+
+.result-issues-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.issue-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.issue-card {
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.issue-card.error {
+    border-left-color: var(--error);
+}
+
+.issue-card.warning {
+    border-left-color: var(--warning);
+}
+
+.issue-topline {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+
+.issue-severity {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+}
+
+.issue-card.error .issue-severity {
+    color: var(--error);
+    background: rgba(248, 113, 113, 0.12);
+}
+
+.issue-card.warning .issue-severity {
+    color: var(--warning);
+    background: rgba(251, 191, 36, 0.12);
+}
+
+.issue-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.issue-count {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.issue-location {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0 0 0.4rem;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.issue-location code {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+}
+
+.issue-reason,
+.issue-fix {
+    margin: 0 0 0.4rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.issue-fix strong {
+    color: var(--text-primary);
+}
+
+.issue-doc-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--accent-primary);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+
+.issue-doc-link:hover {
+    text-decoration: underline;
+}
+
+.issue-doc-link code {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}
+
+.issue-doc-link .issue-doc-label {
+    white-space: nowrap;
+}
+
+.issue-doc-link svg,
+.issue-doc-link i {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.issue-more {
+    margin: 0.85rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
 }
 
 @keyframes fadeScale {
@@ -2304,6 +2673,75 @@ footer {
         gap: 1rem;
     }
 
+    /* On a 390px screen the file picker used to start around 1035px, well
+       below the fold. Tightening the intro and dropping the badge row brings
+       it into the first screen. */
+    .hero-section {
+        padding-top: 84px;
+        padding-bottom: 48px;
+    }
+
+    .hero-container {
+        gap: 1.75rem;
+    }
+
+    .hero-container .badge-row {
+        display: none;
+    }
+
+    .hero-sub {
+        font-size: 1.02rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .hero-actions {
+        width: 100%;
+        gap: 0.6rem;
+    }
+
+    .hero-actions .btn-lg {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .hero-visual {
+        gap: 2rem;
+    }
+
+    h1 {
+        font-size: 1.95rem;
+    }
+
+    /* "Validate a feed" only scrolls to the card directly below it here, so
+       on a phone it costs a full row and buys nothing. The example and the
+       download stay, side by side. */
+    .hero-actions .btn-primary {
+        display: none;
+    }
+
+    .hero-actions {
+        flex-direction: row;
+    }
+
+    .hero-actions .btn-lg {
+        flex: 1 1 0;
+        width: auto;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+        font-size: 0.92rem;
+    }
+
+    .upload-state {
+        min-height: 200px;
+        padding: 1.25rem 0.5rem;
+    }
+
+    .upload-icon {
+        width: 36px;
+        height: 36px;
+        margin-bottom: 0.6rem;
+    }
+
     .stat-item {
         flex: 1;
         min-width: 0;
@@ -2364,14 +2802,24 @@ footer {
         flex-direction: column;
         gap: 0;
         padding: 0.5rem 0;
-        background: rgba(2, 6, 23, 0.98);
-        backdrop-filter: blur(12px);
+        /* Fully opaque. At 0.98 the page behind still read through the panel
+           wherever the content under it was bright — a white h1, the hero
+           badges — and the menu labels lost contrast against it. */
+        background: #0b1220;
         border-bottom: 1px solid var(--border);
+        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.5);
         text-align: left;
     }
 
     .nav-links.open {
         display: flex;
+    }
+
+    /* The bar centres its items; the collapsed panel is a list and must not,
+       or every row shrinks to its own label width. */
+    .nav-links {
+        align-items: stretch;
+        text-align: left;
     }
 
     .nav-links a {
@@ -2382,6 +2830,29 @@ footer {
 
     .nav-links a:hover {
         background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* Inside the collapsed panel the dropdown is just an expandable row; an
+       absolutely positioned menu would hang off the side of the screen. */
+    .nav-dropdown > summary {
+        padding: 0.85rem clamp(1.25rem, 4vw, 2rem);
+        font-size: 1rem;
+        color: var(--text-primary);
+        justify-content: space-between;
+    }
+
+    .nav-dropdown-panel {
+        position: static;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: none;
+    }
+
+    .nav-links .nav-dropdown-panel a {
+        padding-left: calc(clamp(1.25rem, 4vw, 2rem) + 0.85rem);
     }
 }
 
@@ -2394,22 +2865,45 @@ footer {
     position: relative;
 }
 
-/* ChatGPT / MCP result preview */
+/* ChatGPT / MCP result preview.
+   A collapsed disclosure below the report: an integration is worth offering,
+   but not ahead of the errors the reader came to fix. */
 .mcp-preview {
     width: 100%;
-    margin: 0 0 1.25rem;
-    padding: 1.1rem 0;
-    border-top: 1px solid var(--accent-tint-strong);
-    border-bottom: 1px solid var(--accent-tint);
+    margin: 1.25rem 0 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.02);
     text-align: left;
-    opacity: 0;
-    transform: translateY(8px);
-    transition: opacity 0.28s ease, transform 0.28s ease;
 }
 
-.mcp-preview.is-ready {
-    opacity: 1;
-    transform: translateY(0);
+.mcp-preview-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.mcp-preview-summary::-webkit-details-marker {
+    display: none;
+}
+
+.mcp-preview-summary:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.mcp-preview-title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.mcp-preview-inner {
+    padding: 0 1rem 1rem;
 }
 
 .mcp-preview-header,
@@ -2940,4 +3434,44 @@ input:focus-visible {
         animation-duration: 1s !important;
         animation-iteration-count: infinite !important;
     }
+}
+
+
+/* --- Focus visibility ----------------------------------------------------
+   Every path through this page can now be walked with Tab, which only helps
+   if the ring is actually visible against the dark ground. */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+
+/* Benchmark table: the conditions travel with the numbers, so a figure is
+   never read without the feed and machine it came from. */
+.col-note {
+    display: block;
+    margin-top: 0.2rem;
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+.benchmark-note {
+    max-width: 78ch;
+    margin: 1.25rem auto 0;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.benchmark-note a,
+.comparison-table a {
+    color: var(--accent-primary);
 }

@@ -959,8 +959,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Click to browse
-        uploadState.addEventListener('click', () => fileInput.click());
+        // Click to browse. The button inside the zone is the real control —
+        // it is focusable and it fires on Enter/Space — so the zone-level
+        // handler has to stand aside for it, or picking a file from the
+        // keyboard opens the dialog twice.
+        const chooseFileBtn = document.getElementById('choose-file-btn');
+        if (chooseFileBtn) {
+            chooseFileBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileInput.click();
+            });
+        }
+        uploadState.addEventListener('click', (e) => {
+            if (e.target.closest('button, a')) return;
+            fileInput.click();
+        });
 
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length) {
@@ -1003,10 +1016,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tryDemoBtn) {
             tryDemoBtn.addEventListener('click', handleDemoFeed);
         }
+        // The hero button scrolls the validator into view first, so the report
+        // lands where the reader is already looking.
+        const heroDemoBtn = document.getElementById('hero-demo-btn');
+        if (heroDemoBtn) {
+            heroDemoBtn.addEventListener('click', () => {
+                document.getElementById('validator')?.scrollIntoView({
+                    behavior: reducedMotion.matches ? 'auto' : 'smooth',
+                    block: 'start',
+                });
+                handleDemoFeed();
+            });
+        }
 
         // Reset
         function resetValidator() {
             resultState.classList.add('hidden');
+            const issues = document.getElementById('result-issues');
+            if (issues) issues.innerHTML = '';
+            document.getElementById('mcp-preview')?.removeAttribute('open');
             diffResultState?.classList.add('hidden');
             setUploadUiVisible(true);
             fileInput.value = '';
@@ -1623,45 +1651,7 @@ Download the .zip and drop it here instead; validation still runs locally in you
     function renderMcpPreview(result) {
         if (!mcpPreview || !mcpPreviewBody) return;
 
-        let notices = [];
-        try {
-            notices = JSON.parse(result.json) || [];
-        } catch (error) {
-            console.warn('MCP preview: could not parse notices', error);
-        }
-
-        const groups = new Map();
-        notices
-            .filter((notice) => notice.severity === 'ERROR' || notice.severity === 'WARNING')
-            .forEach((notice) => {
-                const key = `${notice.severity}:${notice.code}`;
-                let group = groups.get(key);
-                if (!group) {
-                    group = {
-                        code: notice.code,
-                        severity: notice.severity,
-                        examples: [],
-                        stored: 0,
-                        total: 0,
-                    };
-                    groups.set(key, group);
-                }
-                group.stored += 1;
-                if (group.examples.length < 3) group.examples.push(notice);
-                const exactTotal = Number(
-                    notice.totalNotices ?? result.totalsByCode?.[notice.code] ?? group.stored
-                );
-                group.total = Math.max(group.total, Number.isFinite(exactTotal) ? exactTotal : group.stored);
-            });
-
-        const priority = { ERROR: 0, WARNING: 1 };
-        const featuredGroups = [...groups.values()]
-            .sort((left, right) =>
-                priority[left.severity] - priority[right.severity]
-                || right.total - left.total
-                || left.code.localeCompare(right.code)
-            )
-            .slice(0, 3);
+        const featuredGroups = groupNoticesBySeverity(result, ['ERROR', 'WARNING']).slice(0, 3);
 
         const errors = Number(result.error_count) || 0;
         const warnings = Number(result.warning_count) || 0;
@@ -1723,8 +1713,190 @@ Download the .zip and drop it here instead; validation still runs locally in you
                    <p class="mcp-sample-note">Compact preview: MCP can return up to three examples for every issue type.</p>`
                 : '<p class="mcp-clean-note"><i data-lucide="circle-check"></i> There are no error or warning examples to send.</p>'}
         `;
-        mcpPreview.classList.remove('is-ready');
-        requestAnimationFrame(() => mcpPreview.classList.add('is-ready'));
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    // Groups the notice sample by code, errors before warnings, most frequent
+    // first. Both the inline issue list and the MCP preview read a feed the
+    // same way, so they agree on what the top problems are.
+    function groupNoticesBySeverity(result, severities) {
+        let notices = [];
+        try {
+            notices = JSON.parse(result.json) || [];
+        } catch (error) {
+            console.warn('Could not parse notices', error);
+            return [];
+        }
+
+        const groups = new Map();
+        notices
+            .filter((notice) => severities.includes(notice.severity))
+            .forEach((notice) => {
+                const key = `${notice.severity}:${notice.code}`;
+                let group = groups.get(key);
+                if (!group) {
+                    group = {
+                        code: notice.code,
+                        severity: notice.severity,
+                        examples: [],
+                        stored: 0,
+                        total: 0,
+                    };
+                    groups.set(key, group);
+                }
+                group.stored += 1;
+                if (group.examples.length < 3) group.examples.push(notice);
+                const exactTotal = Number(
+                    notice.totalNotices ?? result.totalsByCode?.[notice.code] ?? group.stored
+                );
+                group.total = Math.max(group.total, Number.isFinite(exactTotal) ? exactTotal : group.stored);
+            });
+
+        const priority = { ERROR: 0, WARNING: 1, INFO: 2 };
+        return [...groups.values()].sort((left, right) =>
+            priority[left.severity] - priority[right.severity]
+            || right.total - left.total
+            || left.code.localeCompare(right.code)
+        );
+    }
+
+    function humanizeCode(code) {
+        const words = String(code).replaceAll('_', ' ').trim();
+        return words.charAt(0).toUpperCase() + words.slice(1);
+    }
+
+    // file · row N · field, built from whichever of the context keys this
+    // notice actually carries.
+    function noticeLocationParts(notice) {
+        const parts = [];
+        const file = notice.file
+            || noticeContextValue(notice, 'filename')
+            || noticeContextValue(notice, 'childFilename');
+        const row = notice.row ?? noticeContextValue(notice, 'csvRowNumber');
+        const field = notice.field
+            || noticeContextValue(notice, 'fieldName')
+            || noticeContextValue(notice, 'childFieldName');
+        if (file) parts.push(String(file));
+        if (row !== null && row !== undefined) parts.push(`row ${row}`);
+        if (field) parts.push(String(field));
+
+        // Some notices carry no filename at all, only the entity they are
+        // about. Without this the card reads "row 4" and the reader has no
+        // idea which file to open.
+        const identifierKeys = ['stopId', 'routeId', 'tripId', 'serviceId', 'shapeId', 'agencyId'];
+        for (const key of identifierKeys) {
+            if (parts.length >= 4) break;
+            const value = noticeContextValue(notice, key);
+            if (value !== null) parts.push(`${key}=${value}`);
+        }
+        return parts;
+    }
+
+    // The report itself, not a teaser for it: what broke, where, and what to
+    // change, without a click. "See More" used to hide all of this behind a
+    // modal while a green tick sat on top of it.
+    function renderResultIssues(result) {
+        const container = document.getElementById('result-issues');
+        if (!container) return;
+
+        const errors = Number(result.error_count) || 0;
+        const warnings = Number(result.warning_count) || 0;
+
+        if (errors === 0 && warnings === 0) {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+            return;
+        }
+
+        const groups = groupNoticesBySeverity(result, ['ERROR', 'WARNING']);
+        if (!groups.length) {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+            return;
+        }
+
+        const shown = groups.slice(0, 4);
+        const remaining = groups.length - shown.length;
+
+        const cardsHtml = shown.map((group) => {
+            const notice = group.examples[0] || {};
+            const location = noticeLocationParts(notice);
+            const locationHtml = location.length
+                ? `<p class="issue-location">${location
+                    .map((part) => `<code>${escapeHtml(String(part))}</code>`)
+                    .join('<span aria-hidden="true">·</span>')}</p>`
+                : '';
+            const fix = notice.fix?.description
+                ? `<p class="issue-fix"><strong>Fix:</strong> ${escapeHtml(notice.fix.description)}</p>`
+                : '';
+            const severityLabel = group.severity === 'ERROR' ? 'Error' : 'Warning';
+            return `
+                <li class="issue-card ${group.severity.toLowerCase()}">
+                    <div class="issue-topline">
+                        <span class="issue-severity">${severityLabel}</span>
+                        <h4 class="issue-title">${escapeHtml(humanizeCode(group.code))}</h4>
+                        <span class="issue-count">${escapeHtml(countLabel(group.total, 'occurrence'))}</span>
+                    </div>
+                    ${locationHtml}
+                    <p class="issue-reason">${escapeHtml(notice.message || humanizeCode(group.code))}</p>
+                    ${fix}
+                    <a class="issue-doc-link" href="/notices/${encodeURIComponent(group.code)}/">
+                        <span class="issue-doc-label">How to fix</span>
+                        <code>${escapeHtml(group.code)}</code>
+                        <i data-lucide="arrow-right"></i>
+                    </a>
+                </li>
+            `;
+        }).join('');
+
+        const moreHtml = remaining > 0
+            ? `<p class="issue-more">${escapeHtml(countLabel(remaining, 'more issue type'))} in this feed — open the full list below.</p>`
+            : '';
+
+        container.innerHTML = `
+            <h3 class="result-issues-title">${errors > 0 ? 'Start with these' : 'Warnings to review'}</h3>
+            <ol class="issue-list">${cardsHtml}</ol>
+            ${moreHtml}
+        `;
+        container.classList.remove('hidden');
+    }
+
+    // Icon, wording and colour all follow the counts. Anything else here is a
+    // claim the report does not support.
+    function renderCompletionIndicator(result) {
+        const indicator = document.getElementById('completion-indicator');
+        const icon = document.getElementById('completion-icon');
+        const text = document.getElementById('completion-text');
+        const sub = document.getElementById('completion-sub');
+        if (!indicator || !icon || !text) return;
+
+        const errors = Number(result.error_count) || 0;
+        const warnings = Number(result.warning_count) || 0;
+
+        indicator.classList.remove('state-clean', 'state-warning', 'state-error');
+
+        if (errors > 0) {
+            indicator.classList.add('state-error');
+            icon.innerHTML = '<i data-lucide="alert-octagon"></i>';
+            text.textContent = `${countLabel(errors, 'error')} need fixing`;
+            if (sub) {
+                sub.textContent = warnings > 0
+                    ? `${countLabel(warnings, 'warning')} to review as well.`
+                    : 'Consumers can reject the feed until these are resolved.';
+            }
+        } else if (warnings > 0) {
+            indicator.classList.add('state-warning');
+            icon.innerHTML = '<i data-lucide="alert-triangle"></i>';
+            text.textContent = `No errors. ${countLabel(warnings, 'warning')} to review`;
+            if (sub) sub.textContent = 'Warnings do not block publication, but they usually point at real data problems.';
+        } else {
+            indicator.classList.add('state-clean');
+            icon.innerHTML = '<i data-lucide="check-circle"></i>';
+            text.textContent = 'No errors or warnings found';
+            if (sub) sub.textContent = 'This feed passed every check GTFS Guru runs.';
+        }
     }
 
     function showResults(result) {
@@ -1736,6 +1908,8 @@ Download the .zip and drop it here instead; validation still runs locally in you
 
         errorCountEl.innerText = errors;
         warningCountEl.innerText = warnings;
+        renderCompletionIndicator(result);
+        renderResultIssues(result);
         renderMcpPreview(result);
 
         // A shared report has no feed behind it, so there is no HTML report to

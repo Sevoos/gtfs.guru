@@ -116,26 +116,38 @@
 <body>
     <nav class="glass-nav">
         <div class="container nav-container">
-            <a href="index.html" class="logo">
+            <a href="/" class="logo">
                 <img src="logo.png" alt="GTFS Guru" style="height: 32px; margin-right: 8px;">
                 <span class="logo-text">GTFS <span class="highlight">Guru</span></span>
             </a>
-            <div class="nav-links">
-                <a href="index.html#validator">Web Validator</a>
-                <a href="index.html#faq">FAQ</a>
+            <div class="nav-links" id="nav-links">
+                <a href="/#validator">Validator</a>
                 <a href="faq.html" class="active">Guides</a>
-                <a href="notices/">Notice codes</a>
-                <a href="compatibility/">Compatibility</a>
+                <details class="nav-dropdown">
+                    <summary>Documentation</summary>
+                    <div class="nav-dropdown-panel">
+                        <a href="notices/">Notice codes</a>
+                        <a href="compatibility/">Compatibility</a>
+                        <a href="/#faq">FAQ</a>
+                    </div>
+                </details>
+                <a href="/#developers">Developers</a>
                 <a href="contact.html">Contact</a>
-                <a href="index.html#developers">Developers</a>
                 <a href="https://github.com/abasis-ltd/gtfs.guru" target="_blank">GitHub</a>
+                <a href="/#validator" class="nav-mobile-cta">Validate a feed</a>
             </div>
-            <a href="index.html#download" class="btn btn-primary">Get the App</a>
+            <div class="nav-actions">
+                <a href="/#validator" class="btn btn-primary">Validate a feed</a>
+                <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Open menu"
+                    aria-expanded="false" aria-controls="nav-links">
+                    <i data-lucide="menu"></i>
+                </button>
+            </div>
         </div>
     </nav>
 
     <article class="faq-article">
-        <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span aria-hidden="true">/</span><a href="faq.html">Guides</a><span aria-hidden="true">/</span><span aria-current="page">Where Can I Find GTFS Feeds to Download?</span></nav>
+        <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-hidden="true">/</span><a href="faq.html">Guides</a><span aria-hidden="true">/</span><span aria-current="page">Where Can I Find GTFS Feeds to Download?</span></nav>
 
         <h1>Where Can I Find GTFS Feeds to Download?</h1>
 
@@ -215,7 +227,7 @@
                 <p>by Abasis.AI</p>
             </div>
             <div class="footer-links">
-                <a href="index.html#faq">FAQ</a>
+                <a href="/#faq">FAQ</a>
                 <a href="faq.html">Guides</a>
                 <a href="notices/">Notice codes</a>
                 <a href="contact.html">Contact</a>
@@ -242,6 +254,7 @@
         }
     </script>
 
+    <script src="nav.js" defer></script>
 </body>
 
 </html>

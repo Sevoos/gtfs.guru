@@ -415,7 +415,7 @@ impl RowValidator {
                 ColumnPlan {
                     header: raw.trim().into(),
                     is_schema_field,
-                    check_non_ascii: is_schema_field && is_id_field(normalized),
+                    check_non_ascii: is_schema_field && is_id_field(file_name, normalized),
                     is_mixed_case: is_mixed_case_field(normalized),
                     check: value_check_for(normalized),
                 }
@@ -1870,8 +1870,23 @@ fn is_phone_field(field: &str) -> bool {
     PHONE_FIELDS.contains(&field)
 }
 
-fn is_id_field(field: &str) -> bool {
-    field.ends_with("_id") || field == "parent_station"
+/// Fields whose name ends in `_id` but which gtfs-validator 8.0.1 does not
+/// annotate `@FieldType(ID)`, so `non_ascii_or_non_printable_char` never
+/// fires on them there (Gtfs*Schema.java). `direction_id` is an enum.
+const NON_ID_TYPED_ID_FIELDS: &[(&str, &str)] = &[
+    ("booking_rules.txt", "prior_notice_service_id"),
+    ("frequencies.txt", "trip_id"),
+    ("location_group_stops.txt", "location_group_id"),
+    ("location_group_stops.txt", "stop_id"),
+    ("timeframes.txt", "service_id"),
+    ("translations.txt", "record_id"),
+    ("translations.txt", "record_sub_id"),
+    ("trips.txt", "direction_id"),
+];
+
+fn is_id_field(file_name: &str, field: &str) -> bool {
+    (field.ends_with("_id") || field == "parent_station")
+        && !NON_ID_TYPED_ID_FIELDS.contains(&(file_name, field))
 }
 
 fn has_only_printable_ascii(value: &str) -> bool {
@@ -2799,5 +2814,54 @@ mod tests_whitespaces {
             "Did not expect whitespace notices, found: {:?}",
             whitespace_notices
         );
+    }
+}
+
+#[cfg(test)]
+mod tests_non_ascii {
+    use super::*;
+
+    fn non_ascii_fields(file_name: &str, data: &[u8]) -> Vec<String> {
+        let mut notices = NoticeContainer::new();
+        validate_csv_data(file_name, data, &mut notices);
+        notices
+            .iter()
+            .filter(|n| n.code == "non_ascii_or_non_printable_char")
+            .map(|n| {
+                n.context["columnName"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn id_typed_fields_are_checked() {
+        let data = "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nvia\u{e7}\u{e3}o,08:00:00,08:00:00,S1,1".as_bytes();
+        assert_eq!(non_ascii_fields("stop_times.txt", data), vec!["trip_id"]);
+    }
+
+    /// São Paulo (mdb-8): frequencies.trip_id is not `@FieldType(ID)` in
+    /// gtfs-validator, so Java never reports it. Same for the other seven.
+    #[test]
+    fn fields_without_id_type_in_java_are_skipped() {
+        let data =
+            "trip_id,start_time,end_time,headway_secs\nvia\u{e7}\u{e3}o,08:00:00,09:00:00,600"
+                .as_bytes();
+        assert!(non_ascii_fields("frequencies.txt", data).is_empty());
+
+        let data = "table_name,field_name,language,translation,record_id,record_sub_id\nstops,stop_name,fr,Gare,arr\u{ea}t,\u{e9}"
+            .as_bytes();
+        assert!(non_ascii_fields("translations.txt", data).is_empty());
+
+        let data = "timeframe_group_id,service_id\n\u{e9}t\u{e9},\u{e9}t\u{e9}".as_bytes();
+        assert_eq!(non_ascii_fields("timeframes.txt", data), vec!["timeframe_group_id"]);
+
+        let data = "location_group_id,stop_id\n\u{e9},\u{e8}".as_bytes();
+        assert!(non_ascii_fields("location_group_stops.txt", data).is_empty());
+
+        let data = "booking_rule_id,booking_type,prior_notice_service_id\nr\u{e8}gle,2,\u{e9}".as_bytes();
+        assert_eq!(non_ascii_fields("booking_rules.txt", data), vec!["booking_rule_id"]);
     }
 }

@@ -119,8 +119,12 @@ fn main() {
                 let items = order_caps.name("items").map(|m| m.as_str()).unwrap_or("");
                 for item_caps in item_re.captures_iter(items) {
                     let field_name = item_caps[1].to_string();
-                    let field_type = infer_type(&field_name, "").to_string();
-                    merge_field_type(&mut entry.1, field_name, field_type);
+                    // field_order only names fields; a name-based guess must
+                    // not downgrade a type already read off the insert call.
+                    entry
+                        .1
+                        .entry(field_name.clone())
+                        .or_insert_with(|| infer_type(&field_name, "").to_string());
                 }
             }
         }

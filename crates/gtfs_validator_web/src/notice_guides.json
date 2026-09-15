@@ -6,6 +6,51 @@
     "bad": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,S1,1\nT1,09:00:00,09:00:00,S2,2\nT2,08:30:00,08:30:00,S3,1\nT2,09:30:00,09:30:00,S4,2",
     "good": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,S1,1\nT1,09:00:00,09:00:00,S2,2\nT2,09:00:00,09:00:00,S2,1\nT2,09:30:00,09:30:00,S4,2"
   },
+  "csv_parsing_failed": {
+    "impact": "The file could not be read as CSV at all, so nothing in it reaches validation. Everything that file defines is missing from the feed, and consumers will reject the dataset.",
+    "fix": "Repair the file's CSV structure at source. Values containing a comma, a quote or a line break must be wrapped in double quotes, and a literal double quote inside a quoted value is written twice.",
+    "causes": [
+      "A value such as `Central Station, Platform 2` written without quotes, which splits one field into two.",
+      "An unbalanced double quote, after which the parser reads the rest of the file as one enormous value.",
+      "A stray line break inside a stop or route name.",
+      "A file saved as semicolon- or tab-separated by a spreadsheet using a European locale.",
+      "Mixed line endings, or a byte-order mark in the middle of the file rather than at its start."
+    ],
+    "pitfall": "Do not strip every comma out of your names to make the file parse. Quote the value instead — `\"Central Station, Platform 2\"` is legal CSV and keeps the name riders recognise.",
+    "file": "the file named in the report",
+    "bad": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central Station, Platform 2,35.17,33.36",
+    "good": "stop_id,stop_name,stop_lat,stop_lon\nS1,\"Central Station, Platform 2\",35.17,33.36"
+  },
+  "decreasing_or_equal_stop_time_distance": {
+    "impact": "`shape_dist_traveled` must grow along a trip, because it measures how far the vehicle has travelled. A value that repeats or goes down places a later stop at or behind an earlier one on the shape, so consumers cannot map stops onto the route line and may drop the shape or the trip.",
+    "fix": "Recompute `shape_dist_traveled` for the trip so that it increases strictly with `stop_sequence`, in the same unit as the matching `shapes.txt` values.",
+    "causes": [
+      "Stop times generated in a different order than the shape runs, so the distances follow the wrong direction.",
+      "Distances rounded to whole units until two nearby stops ended up equal.",
+      "Values in mixed units — kilometres in `stop_times.txt` against metres in `shapes.txt`.",
+      "A loop or an out-and-back route where the same point is visited twice and the second visit reused the first one's distance."
+    ],
+    "cross_check": "Compare against `shapes.txt` for the same `shape_id`: the two files must use one unit and one origin, or every stop on the trip will be placed wrongly.",
+    "pitfall": "Do not add an arbitrary increment to each row to force the sequence upwards. `shape_dist_traveled` positions stops along the line; fabricated values move the stops rather than fixing them. If you cannot compute real distances, leave the column empty for that trip.",
+    "file": "stop_times.txt",
+    "bad": "trip_id,arrival_time,departure_time,stop_id,stop_sequence,shape_dist_traveled\nT1,08:00:00,08:00:00,S1,1,0\nT1,08:05:00,08:05:00,S2,2,1200\nT1,08:11:00,08:11:00,S3,3,1200",
+    "good": "trip_id,arrival_time,departure_time,stop_id,stop_sequence,shape_dist_traveled\nT1,08:00:00,08:00:00,S1,1,0\nT1,08:05:00,08:05:00,S2,2,1200\nT1,08:11:00,08:11:00,S3,3,2450"
+  },
+  "duplicate_key": {
+    "impact": "Two rows share the value that is supposed to identify a row uniquely, so every reference to that id is ambiguous. Consumers resolve it by keeping one row and discarding the other, and which one survives is not defined — a duplicated `stop_id` can quietly relocate a stop, and a duplicated `trip_id` can drop half a schedule.",
+    "fix": "Give each record its own id, or delete the row that is a genuine duplicate. For composite keys such as `stop_times.txt` (`trip_id` + `stop_sequence`) or `calendar_dates.txt` (`service_id` + `date`), it is the combination that has to be unique, so renumbering the sequence is often the correct repair rather than renaming anything.",
+    "causes": [
+      "The same source file exported or appended twice, so every row appears in duplicate.",
+      "Two agencies or depots merged into one feed while each kept its own id numbering.",
+      "`stop_sequence` restarted at 1 partway through a trip, or repeated a value, so the `trip_id` + `stop_sequence` pair collides.",
+      "An id reused after a record was retired, so a new stop inherited a decommissioned stop's `stop_id`.",
+      "A spreadsheet autofilled an id column down a block of rows."
+    ],
+    "pitfall": "Do not fix a duplicated id by appending `_2` to one of the rows without checking what references it. If both rows are really the same entity, half your `stop_times.txt` now points at an id nobody defines and a `foreign_key_violation` takes the error's place.",
+    "file": "the file named in the report (`stops.txt`, `trips.txt`, `stop_times.txt` …)",
+    "bad": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central,35.17,33.36\nS1,Harbour,35.18,33.37",
+    "good": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central,35.17,33.36\nS2,Harbour,35.18,33.37"
+  },
   "duplicate_route_name": {
     "impact": "Riders can see indistinguishable routes, and consumers may merge or label distinct services ambiguously.",
     "fix": "Give routes in the same agency and mode a unique short/long-name combination. Model opposite directions as trips of one route, not as duplicate routes.",
@@ -20,6 +65,21 @@
     "bad": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central,35.17,33.36\n␠␠␠\nS2,Harbour,35.18,33.37",
     "good": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central,35.17,33.36\nS2,Harbour,35.18,33.37"
   },
+  "expired_calendar": {
+    "impact": "Every service this `service_id` defines has already ended, counting `calendar.txt` and `calendar_dates.txt` together. Trips on it run on no future date, so as far as any rider is concerned that service no longer exists.",
+    "fix": "Extend the service into the period the feed is meant to cover, or remove the service and the trips that depend on it if it really has been withdrawn. A feed should normally be republished before its service periods lapse.",
+    "causes": [
+      "A feed published on schedule but built from a timetable extract that was not rolled forward.",
+      "A seasonal or school service left in the feed after its last day.",
+      "`calendar.txt` updated for the new period while `calendar_dates.txt` exceptions were left on the old one, or the reverse.",
+      "An automated export pinned to a fixed date range rather than to the current one."
+    ],
+    "cross_check": "Look at `calendar_dates.txt` as well — an added date there can keep a service alive past its `calendar.txt` `end_date`, and this check already accounts for that.",
+    "pitfall": "Do not push `end_date` years into the future to stop the warning recurring. A service period that outlives the timetable it was built from publishes schedules you have not actually planned.",
+    "file": "calendar.txt",
+    "bad": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nWKDY,1,1,1,1,1,0,0,20240105,20240630",
+    "good": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nWKDY,1,1,1,1,1,0,0,20260105,20260630"
+  },
   "fast_travel_between_consecutive_stops": {
     "impact": "Journey planners may show impossible travel times; the issue often reveals swapped coordinates or an incorrect timestamp.",
     "fix": "Verify both stop coordinates and the consecutive arrival/departure times. Correct the value that creates the unrealistic speed.",
@@ -33,6 +93,78 @@
     "file": "stop_times.txt",
     "bad": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT7,10:00:00,10:00:00,CITY_A,1\nT7,10:02:00,10:02:00,CITY_B,2",
     "good": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT7,10:00:00,10:00:00,CITY_A,1\nT7,11:02:00,11:02:00,CITY_B,2"
+  },
+  "foreign_key_violation": {
+    "impact": "A row points at an id that does not exist anywhere in the file it references. The reference is dangling, so the record it belongs to cannot be resolved: a trip whose `service_id` is missing from `calendar.txt` never runs, a `stop_times.txt` row whose `stop_id` is missing from `stops.txt` has no location, and a route whose `agency_id` is unknown has no operator. Consumers drop the affected rows, and dropping a `stop_times.txt` row silently removes a stop from a trip. The report names both sides: `childFilename`/`childFieldName` is where the broken reference was written, `parentFilename`/`parentFieldName` is where the id should have been defined, and `fieldValue` is the id that was not found.",
+    "fix": "Decide which side is wrong before editing anything. If the id in the child row is a typo or a leftover from an older export, correct it to an id that exists in the parent file. If the id is right and the parent row is genuinely missing, add that row to the parent file with its real data.",
+    "causes": [
+      "A typo or case difference in the id — `STOP_42` in `stop_times.txt` against `stop_42` in `stops.txt`. GTFS ids are case-sensitive, and so is this check.",
+      "A stray space or a zero-width character copied in from a spreadsheet, so the two ids look identical but do not compare equal.",
+      "A row was deleted from the parent file (a retired stop, a discontinued route) while the rows referencing it were left behind.",
+      "A partial export: `calendar.txt` or `calendar_dates.txt` was regenerated for a new period, and trips still carry `service_id` values from the old one.",
+      "Two source systems with different id schemes merged into one feed, so one system's ids never made it into the parent file.",
+      "An id built by concatenation that lost a prefix or a suffix somewhere in the export pipeline."
+    ],
+    "cross_check": "Open the parent file named in `parentFilename` and search for the exact `fieldValue` from the report. No match means the id was never defined; a match that differs only in case or whitespace means the child row needs normalising, not a new parent row.",
+    "pitfall": "Do not invent a placeholder row in the parent file just to make the notice go away. A fabricated `stops.txt` entry at 0,0 for a missing `stop_id` turns a loud error into a stop in the Gulf of Guinea that riders will be routed to, and a fake `calendar.txt` service with every day set to 0 turns a broken trip into a trip that quietly never runs. Add the real record, or remove the reference.",
+    "file": "the child file named in the report (`stop_times.txt`, `trips.txt`, `routes.txt` …)",
+    "bad": "stop_times.txt\ntrip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,STOP_42,1\n\nstops.txt\nstop_id,stop_name,stop_lat,stop_lon\nSTOP_41,Central,35.17,33.36",
+    "good": "stop_times.txt\ntrip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,STOP_41,1\n\nstops.txt\nstop_id,stop_name,stop_lat,stop_lon\nSTOP_41,Central,35.17,33.36"
+  },
+  "invalid_color": {
+    "impact": "The colour cannot be parsed, so consumers fall back to a default. Route branding disappears, and a route that riders identify by colour loses the cue.",
+    "fix": "Write colours as exactly six hexadecimal digits with no leading `#`: `FFA500`, not `#FFA500`, `orange` or `255,165,0`.",
+    "causes": [
+      "A `#` copied in from CSS or a design tool.",
+      "A three-digit shorthand such as `F80`.",
+      "A colour name or an RGB triple instead of hex.",
+      "A spreadsheet reading `000000` as the number zero and writing `0`."
+    ],
+    "file": "routes.txt",
+    "bad": "route_id,route_short_name,route_type,route_color,route_text_color\nR1,10,3,#FFA500,#000000",
+    "good": "route_id,route_short_name,route_type,route_color,route_text_color\nR1,10,3,FFA500,000000"
+  },
+  "invalid_date": {
+    "impact": "The value is not a GTFS date, so the service period or exception it defines cannot be read. A `calendar.txt` row with an unreadable date defines no service, and the trips using it disappear.",
+    "fix": "Write dates as eight digits, `YYYYMMDD`, with no separators — 13 September 2026 is `20260913`.",
+    "causes": [
+      "A spreadsheet reformatted the column as a date and wrote `2026-09-13`, `13/09/2026` or `9/13/26`.",
+      "A leading zero dropped, so `20260901` became `2026091`.",
+      "An Excel serial number such as `46278` written out instead of the date.",
+      "A locale swapping day and month, which can also produce a valid-looking but wrong date."
+    ],
+    "pitfall": "When the day and month may have been swapped, check the intended date rather than just reformatting what is there — `20260309` and `20260903` are both valid dates and only one of them is your service change.",
+    "file": "calendar.txt",
+    "bad": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nWKDY,1,1,1,1,1,0,0,2026-01-05,2026-06-30",
+    "good": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nWKDY,1,1,1,1,1,0,0,20260105,20260630"
+  },
+  "invalid_time": {
+    "impact": "The value is not a GTFS time, so the arrival or departure it represents cannot be read. Consumers drop the stop time or the whole trip, which removes service from the feed.",
+    "fix": "Write times as `HH:MM:SS` on a 24-hour clock, counted from noon minus twelve hours of the service day. Times after midnight on a service that started the previous day continue past 24 — a trip leaving at 1:35 the next morning is `25:35:00`, not `01:35:00`.",
+    "causes": [
+      "A spreadsheet reformatted the column as a time or a duration and wrote `8:00 AM`, `08:00` or a decimal fraction of a day.",
+      "Seconds omitted: `14:30` instead of `14:30:00`.",
+      "Trips running past midnight written as `00:20:00`, which places them at the start of the same service day instead of after it.",
+      "A locale that uses a comma or a dot as the separator instead of a colon."
+    ],
+    "pitfall": "Do not convert a past-midnight time to `00:20:00` to make it look valid. That is a syntactically correct time twenty-four hours away from the trip it belongs to, and it will reorder the trip's stops.",
+    "file": "stop_times.txt",
+    "bad": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,11:55 PM,11:55 PM,S1,1\nT1,12:20,12:20,S2,2",
+    "good": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,23:55:00,23:55:00,S1,1\nT1,24:20:00,24:20:00,S2,2"
+  },
+  "invalid_url": {
+    "impact": "The value is not a usable URL, so the link is dead wherever a consumer shows it — an agency site, a route page or a stop's information page.",
+    "fix": "Write a complete absolute URL including the scheme: `https://example.com/routes/10`. Relative paths, bare hostnames and text such as `see website` are not URLs.",
+    "causes": [
+      "The scheme omitted: `www.example.com` rather than `https://www.example.com`.",
+      "A spreadsheet wrapping the value in a hyperlink formula, so the cell exports as `=HYPERLINK(\"…\")`.",
+      "Spaces or line breaks inside the value.",
+      "A placeholder such as `N/A` or `none` left in an optional column that would have been fine left empty."
+    ],
+    "pitfall": "If you have no URL for a row, leave the field empty rather than inventing one. An optional URL column accepts blanks; it does not accept a link that 404s.",
+    "file": "agency.txt",
+    "bad": "agency_id,agency_name,agency_url,agency_timezone\nA,City Transit,www.citytransit.example,Europe/Nicosia",
+    "good": "agency_id,agency_name,agency_url,agency_timezone\nA,City Transit,https://www.citytransit.example,Europe/Nicosia"
   },
   "leading_or_trailing_whitespaces": {
     "impact": "Identifiers that differ only by spaces can break foreign-key matching, while rider-facing text may display unevenly.",
@@ -69,6 +201,76 @@
     "bad": "feed.zip\n├── agency.txt\n├── routes.txt\n└── trips.txt",
     "good": "feed.zip\n├── agency.txt\n├── routes.txt\n├── trips.txt\n└── feed_info.txt"
   },
+  "missing_required_column": {
+    "impact": "A column the specification requires is absent from the file entirely, so every row in it is missing that information. Consumers commonly reject the whole file rather than a row, which can take the feed with it.",
+    "fix": "Add the column to the file's header and give every row a value. Check the spelling against the specification — a column named `stop_lattitude` or `Stop_Lat` is not the required `stop_lat`, and the validator will also report it as an unknown column.",
+    "causes": [
+      "A misspelled or differently capitalised header; GTFS column names are lower-case and exact.",
+      "A spreadsheet saved with the header row deleted or with an extra title row above it.",
+      "An export template written against an older GTFS revision, before the column became required.",
+      "A byte-order mark (BOM) glued to the first header name, so `stop_id` is read as `\\ufeffstop_id`."
+    ],
+    "pitfall": "Do not add the column with every cell blank. That trades one error for a `missing_required_field` on every row and leaves the feed just as unusable.",
+    "file": "the file named in the report",
+    "bad": "stop_id,stop_name,stop_lon\nS1,Central,33.36",
+    "good": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central,35.17,33.36"
+  },
+  "missing_required_field": {
+    "impact": "A field the specification requires is empty in this row. The record cannot be interpreted without it, so consumers usually drop the row — and a dropped `stop_times.txt` row removes a stop from a trip without any other signal that something is wrong.",
+    "fix": "Fill in the real value for the row named in the report. The column exists; only this row's cell is empty, so this is a data gap rather than a schema problem.",
+    "causes": [
+      "A source record that was never completed — a stop added to the scheduling system without coordinates, or a route without a name.",
+      "A spreadsheet export that wrote an empty string where the source system had a null.",
+      "Rows shifted by one because an earlier row contains an unquoted comma inside a value, so a required column lines up against blank text.",
+      "A CSV assembled by concatenating exports with different column orders."
+    ],
+    "pitfall": "Do not fill the cell with a placeholder such as `0`, `N/A` or `unknown` to clear the error. A `stop_lat` of 0 is a valid coordinate off the coast of Africa, and `N/A` in `stop_name` is what riders will see in the app.",
+    "file": "the file named in the report",
+    "bad": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central,35.17,33.36\nS2,,35.18,33.37",
+    "good": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central,35.17,33.36\nS2,Harbour Road,35.18,33.37"
+  },
+  "missing_required_file": {
+    "impact": "A file the specification requires is not in the archive. A GTFS dataset without it is incomplete, and consumers reject it outright rather than importing part of it.",
+    "fix": "Add the file to the archive. If the file exists but is still reported missing, check that it sits at the root of the ZIP rather than inside a folder, and that the name matches exactly — lower-case, with the `.txt` extension.",
+    "causes": [
+      "The ZIP was built from a containing folder, so every file sits one directory down instead of at the archive root.",
+      "A file named `Stops.txt`, `stops.TXT` or `stops.csv` rather than `stops.txt`.",
+      "Service defined only in `calendar_dates.txt` with no `calendar.txt`, or the reverse — at least one of the two must be present.",
+      "An export step that silently skipped a file when its source table was empty."
+    ],
+    "pitfall": "Do not satisfy this by adding a file that contains only a header row. An empty `calendar.txt` produces a feed in which nothing ever runs — which is harder to notice than a missing file.",
+    "file": "the archive root",
+    "bad": "gtfs.zip\n  my-feed/agency.txt\n  my-feed/stops.txt\n  my-feed/routes.txt",
+    "good": "gtfs.zip\n  agency.txt\n  stops.txt\n  routes.txt"
+  },
+  "missing_stop_name": {
+    "impact": "`stop_name` is what a rider reads in the app, on the departure board and in the itinerary. A stop, station or entrance without one shows up as a blank or as a raw id, and consumers may drop the location entirely.",
+    "fix": "Give the location the name a rider would recognise at the roadside. The requirement applies to stops and platforms (`location_type=0`), stations (`location_type=1`) and entrances or exits (`location_type=2`); boarding areas and generic nodes may leave it empty.",
+    "causes": [
+      "A stop created from coordinates alone, with the name still to be filled in.",
+      "An export that mapped an internal code into `stop_id` and left `stop_name` unmapped.",
+      "A station row added to group platforms, with only the platforms named.",
+      "Non-ASCII names dropped by an encoding step that could not represent them."
+    ],
+    "pitfall": "Do not paste the `stop_id` into `stop_name` to clear the error. `S_10427_B` is not a place, and it is exactly what riders will be told to walk to.",
+    "file": "stops.txt",
+    "bad": "stop_id,stop_name,stop_lat,stop_lon,location_type\nS2,,35.18,33.37,0",
+    "good": "stop_id,stop_name,stop_lat,stop_lon,location_type\nS2,Harbour Road,35.18,33.37,0"
+  },
+  "missing_trip_edge": {
+    "impact": "The first and last stop time of every trip must carry both an arrival and a departure time, because they anchor the trip in the timetable. Without them, consumers cannot tell when the trip starts or ends and may drop it.",
+    "fix": "Fill in `arrival_time` and `departure_time` on the first and last rows of the trip, in `stop_sequence` order. Intermediate stops may leave both blank so that consumers interpolate them, but the two edges may not.",
+    "causes": [
+      "A timetable that stores only timing points, with the terminus not marked as one.",
+      "An export that blanks `arrival_time` at the first stop and `departure_time` at the last stop as a matter of principle — GTFS requires both at both ends.",
+      "Stop times reordered so that a row without times became the trip's first or last.",
+      "A trip extended with a new terminus whose times were not entered."
+    ],
+    "pitfall": "Do not copy the neighbouring stop's time into the edge. That publishes a departure the vehicle does not make; if the real time is unknown, find it rather than inventing one.",
+    "file": "stop_times.txt",
+    "bad": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,,,S1,1\nT1,08:05:00,08:05:00,S2,2\nT1,,,S3,3",
+    "good": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,S1,1\nT1,,,S2,2\nT1,08:11:00,08:11:00,S3,3"
+  },
   "mixed_case_recommended_field": {
     "impact": "ALL-CAPS or all-lowercase customer text is harder to scan and performs poorly in screen readers and voice interfaces.",
     "fix": "Rewrite rider-facing names in natural mixed case while preserving official capitalization and acronyms.",
@@ -83,12 +285,40 @@
     "bad": "stop_id,stop_name\n\"S1\\u0007\",Central",
     "good": "stop_id,stop_name\nS1,Central"
   },
+  "number_out_of_range": {
+    "impact": "The value is numeric but outside the range the specification allows for the field, so the record cannot be interpreted. Consumers drop the row, and a dropped stop or stop time removes service.",
+    "fix": "Check the field's permitted range in the GTFS reference and correct the value at source. Latitudes run from -90 to 90 and longitudes from -180 to 180; `stop_sequence`, headways and counts must be non-negative.",
+    "causes": [
+      "Latitude and longitude swapped, which pushes the latitude past 90 anywhere outside the tropics.",
+      "Coordinates exported in a projected system (metres) instead of WGS 84 degrees.",
+      "A decimal separator lost, turning 35.17 into 3517.",
+      "A negative or zero value where the field requires a positive one, such as a headway of 0."
+    ],
+    "pitfall": "Do not clamp an out-of-range coordinate to the nearest legal value. A latitude forced from 3517 down to 90 is a valid coordinate at the North Pole, and the feed will pass this check while pointing riders at the Arctic.",
+    "file": "stops.txt",
+    "bad": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central,33.36,35.17\nS2,Harbour,3518,33.37",
+    "good": "stop_id,stop_name,stop_lat,stop_lon\nS1,Central,35.17,33.36\nS2,Harbour,35.18,33.37"
+  },
   "platform_without_parent_station": {
     "impact": "Consumers cannot group the platform into a station, which weakens station navigation and transfer presentation.",
     "fix": "Create or identify the parent station row and set the platform's parent_station to that station's stop_id.",
     "file": "stops.txt",
     "bad": "stop_id,stop_name,location_type,parent_station\nP1,Central Platform 1,0,",
     "good": "stop_id,stop_name,location_type,parent_station\nST,Central Station,1,\nP1,Central Platform 1,0,ST"
+  },
+  "route_both_short_and_long_name_missing": {
+    "impact": "The route has no name of any kind, so there is nothing to put on a map label, a departure board or an itinerary. At least one of `route_short_name` and `route_long_name` is required.",
+    "fix": "Fill in `route_short_name` with the designation riders see on the vehicle (`10`, `N4`, `Red`), or `route_long_name` with the descriptive name (`Downtown – Airport`), or both when they carry different information.",
+    "causes": [
+      "A route created as a placeholder while its naming was still being decided.",
+      "A source system that stores the designation in a field the export did not map.",
+      "Both names stored in one field upstream and split into neither on export.",
+      "A rail or ferry line identified internally by a code that was never treated as a public-facing name."
+    ],
+    "pitfall": "Do not copy `route_id` into `route_short_name`. Internal ids are long, cryptic and unstable, and `route_short_name` is displayed to riders verbatim.",
+    "file": "routes.txt",
+    "bad": "route_id,agency_id,route_short_name,route_long_name,route_type\nR1,A,,,3",
+    "good": "route_id,agency_id,route_short_name,route_long_name,route_type\nR1,A,10,Downtown – Airport,3"
   },
   "route_color_contrast": {
     "impact": "Route labels may be unreadable in maps and lists, especially for riders with low vision.",
@@ -110,6 +340,35 @@
     "file": "routes.txt",
     "bad": "route_id,route_short_name,route_long_name,route_type\nR1,Airport Express,,3",
     "good": "route_id,route_short_name,route_long_name,route_type\nR1,AX,Airport Express,3"
+  },
+  "start_and_end_range_out_of_order": {
+    "impact": "A range ends before it begins, so it covers nothing. A `calendar.txt` row like this defines no service days at all and every trip on that `service_id` vanishes; in `stop_times.txt` it means a vehicle departs before it arrives.",
+    "fix": "Put the two values the right way round, or correct whichever one is wrong. Check the intent first: an end date a year earlier than the start date is usually a typo in the year, not a swap.",
+    "causes": [
+      "Two columns swapped during an export or a manual edit.",
+      "A year typo — `20250630` where `20260630` was meant.",
+      "A service period rolled forward by updating `start_date` and leaving the old `end_date` behind.",
+      "In `stop_times.txt`, a `departure_time` earlier than the `arrival_time` in the same row, often from a past-midnight time written without the 24+ hour convention."
+    ],
+    "pitfall": "Do not simply swap the values without looking at them. If the real error is a mistyped year, swapping gives you a service period that is valid, orderly and wrong.",
+    "file": "calendar.txt",
+    "bad": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nWKDY,1,1,1,1,1,0,0,20260630,20260105",
+    "good": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nWKDY,1,1,1,1,1,0,0,20260105,20260630"
+  },
+  "stop_time_with_arrival_before_previous_departure_time": {
+    "impact": "The vehicle arrives at a stop before it left the one before it, so the trip travels backwards in time. Journey planners either reject the trip or show a nonsensical itinerary for it.",
+    "fix": "Correct the times so that each stop's arrival is at or after the previous stop's departure along the whole `stop_sequence`. Where the trip crosses midnight, keep counting past 24 rather than wrapping to 00.",
+    "causes": [
+      "A trip that runs past midnight with later stops written as `00:10:00` instead of `24:10:00`.",
+      "Stop times interpolated or rounded by a scheduling tool until two adjacent stops crossed over.",
+      "Rows reordered by `stop_id` or by time rather than by `stop_sequence` during an export.",
+      "A layover or a timing point edited in isolation without shifting the rest of the trip."
+    ],
+    "cross_check": "Read the whole trip in `stop_sequence` order, not just the flagged row — one mistyped time makes the row after it look wrong too.",
+    "pitfall": "Do not nudge the later stop forward by a minute just to clear the check. If the real cause is a midnight wrap, the trip is still a day out and the published times will not match what the vehicle does.",
+    "file": "stop_times.txt",
+    "bad": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,23:50:00,23:52:00,S1,1\nT1,00:10:00,00:10:00,S2,2",
+    "good": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,23:50:00,23:52:00,S1,1\nT1,24:10:00,24:10:00,S2,2"
   },
   "stop_too_far_from_shape": {
     "impact": "Vehicles can appear off-route and walking directions may lead riders away from the actual boarding point.",
@@ -139,11 +398,41 @@
     "bad": "stop_id,stop_nam,stop_lat,stop_lon",
     "good": "stop_id,stop_name,stop_lat,stop_lon"
   },
+  "unusable_trip": {
+    "impact": "A trip with fewer than two stop times cannot be boarded and alighted, so no rider can ever use it. Journey planners ignore it, and it inflates the apparent size of the feed without adding service.",
+    "fix": "Add the missing `stop_times.txt` rows so the trip visits at least two stops, or remove the trip if it is not real service.",
+    "causes": [
+      "A truncated `stop_times.txt` export — a row limit, a failed write, or a filter that dropped part of the file.",
+      "Stop times filtered out by a `foreign_key_violation` on `stop_id` earlier in the pipeline, leaving the trip with one stop or none.",
+      "Deadhead or garage movements exported as passenger trips.",
+      "A trip duplicated from another one and saved before its stop times were entered."
+    ],
+    "cross_check": "Count the `stop_times.txt` rows for this `trip_id`. Zero rows usually means an export problem; exactly one usually means the rest of the trip was filtered out somewhere.",
+    "pitfall": "Do not add a second stop time at the same stop to reach the count of two. That produces a trip that goes nowhere and will be reported again for zero travel between consecutive stops.",
+    "file": "stop_times.txt",
+    "bad": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,S1,1",
+    "good": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,S1,1\nT1,08:12:00,08:12:00,S2,2"
+  },
   "unused_stop": {
     "impact": "The feed carries a location that is not served and is not needed as a parent, increasing noise and the chance of stale data.",
     "fix": "Remove the stop if obsolete, or reference it from the correct stop_times row. This notice is produced in thorough mode.",
     "file": "stops.txt / stop_times.txt",
     "bad": "stops.txt: S2,Unused Stop,35.18,33.37\nstop_times.txt: no row references S2",
     "good": "stop_times.txt: T1,09:10:00,09:10:00,S2,2"
+  },
+  "wrong_parent_location_type": {
+    "impact": "The station hierarchy is malformed, so platform grouping, in-station transfers and pathway routing cannot be resolved. Consumers may drop the affected locations or the station they belong to.",
+    "fix": "Make the parent a station. A stop or platform (`location_type=0`), an entrance or exit (`location_type=2`), a generic node (`3`) and a boarding area (`4`) each need a parent, and for the first three that parent must be a row with `location_type=1`; a boarding area's parent must be a platform. A station itself must have an empty `parent_station`.",
+    "causes": [
+      "`parent_station` pointing at another platform instead of at the station row that contains both.",
+      "A station given a `parent_station` of its own, usually to model a complex of several stations.",
+      "`location_type` left empty on the intended station row, which makes it a plain stop by default.",
+      "Two levels of station nesting, which GTFS does not model."
+    ],
+    "cross_check": "Look up the row whose `stop_id` equals the `parent_station` value and read its `location_type` — that is the value the check objected to.",
+    "pitfall": "Do not clear `parent_station` to silence the notice. That detaches the platform from its station and breaks transfers and wayfinding inside it, without making the data any more correct.",
+    "file": "stops.txt",
+    "bad": "stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\nP1,Central Platform 1,35.17,33.36,0,P2\nP2,Central Platform 2,35.17,33.36,0,",
+    "good": "stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\nST1,Central Station,35.17,33.36,1,\nP1,Central Platform 1,35.17,33.36,0,ST1\nP2,Central Platform 2,35.17,33.36,0,ST1"
   }
 }

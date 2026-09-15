@@ -3,22 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>More than one row in CSV. — GTFS notice more_than_one_entity</title>
-  <meta name="description" content="More than one row in CSV. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the more_than_one_entity notice.">
+  <title>Fix more_than_one_entity in GTFS | GTFS Guru</title>
+  <meta name="description" content="More than one row in CSV. What the more_than_one_entity notice means, the files and fields it points at, and how to repair the feed.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://gtfs.guru/notices/more_than_one_entity/">
   <link rel="sitemap" type="application/xml" href="https://gtfs.guru/sitemap.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="GTFS Guru">
-  <meta property="og:title" content="More than one row in CSV. — GTFS notice more_than_one_entity">
-  <meta property="og:description" content="More than one row in CSV. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the more_than_one_entity notice.">
+  <meta property="og:title" content="Fix more_than_one_entity in GTFS | GTFS Guru">
+  <meta property="og:description" content="More than one row in CSV. What the more_than_one_entity notice means, the files and fields it points at, and how to repair the feed.">
   <meta property="og:url" content="https://gtfs.guru/notices/more_than_one_entity/">
   <meta property="og:image" content="https://gtfs.guru/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#07111f">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
   <link rel="stylesheet" href="/notices/notice.css">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://gtfs.guru/notices/more_than_one_entity/#article","@type":"TechArticle","about":{"@type":"Thing","name":"GTFS validation notice more_than_one_entity"},"author":{"@type":"Organization","name":"GTFS Guru","url":"https://gtfs.guru/"},"description":"More than one row in CSV. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the more_than_one_entity notice.","headline":"More than one row in CSV.","isAccessibleForFree":true,"mainEntityOfPage":"https://gtfs.guru/notices/more_than_one_entity/","publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://gtfs.guru/logo.png"},"name":"GTFS Guru","url":"https://gtfs.guru/"},"url":"https://gtfs.guru/notices/more_than_one_entity/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://gtfs.guru/","name":"GTFS Guru","position":1},{"@type":"ListItem","item":"https://gtfs.guru/notices/","name":"Notice codes","position":2},{"@type":"ListItem","item":"https://gtfs.guru/notices/more_than_one_entity/","name":"more_than_one_entity","position":3}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://gtfs.guru/notices/more_than_one_entity/#article","@type":"TechArticle","about":{"@type":"Thing","name":"GTFS validation notice more_than_one_entity"},"author":{"@type":"Organization","name":"GTFS Guru","url":"https://gtfs.guru/"},"description":"More than one row in CSV. What the more_than_one_entity notice means, the files and fields it points at, and how to repair the feed.","headline":"More than one row in CSV.","isAccessibleForFree":true,"mainEntityOfPage":"https://gtfs.guru/notices/more_than_one_entity/","publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://gtfs.guru/logo.png"},"name":"GTFS Guru","url":"https://gtfs.guru/"},"url":"https://gtfs.guru/notices/more_than_one_entity/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://gtfs.guru/","name":"GTFS Guru","position":1},{"@type":"ListItem","item":"https://gtfs.guru/notices/","name":"Notice codes","position":2},{"@type":"ListItem","item":"https://gtfs.guru/notices/more_than_one_entity/","name":"more_than_one_entity","position":3}]}]}</script>
   <script src="/notices/notice.js" defer></script>
 </head>
 <body>
@@ -57,7 +57,6 @@
         <a href="#impact">Why it matters</a>
         <a href="#files">Files and fields</a>
         <a href="#fix">How to fix</a>
-
         <a href="#references">References</a>
         <a href="#related">Related notices</a>
       </aside>
@@ -88,9 +87,10 @@
           <p>Use the evidence in the report to identify the failing record, then make the smallest source-data change that satisfies the rule.</p>
           <ol class="steps">
             <li><span>1</span><div><strong>Locate the record</strong><p>Open the file named in the validation report and use the report fields below to find the exact row.</p></div></li>
-            <li><span>2</span><div><strong>Change the source data</strong><p>Apply the requirement described above without changing unrelated rows.</p></div></li>
+            <li><span>2</span><div><strong>Change the source data</strong><p>Apply the repair described above to that record, and leave unrelated rows alone.</p></div></li>
             <li><span>3</span><div><strong>Validate again</strong><p>Rebuild the GTFS archive and confirm that <code>more_than_one_entity</code> no longer appears for the record.</p></div></li>
           </ol>
+          <p class="revalidate"><a class="revalidate-link" href="/#validator">Re-check your feed in the browser</a><span>Free, no upload for a file you pick.</span></p>
         </section>
         <section id="references">
           <p class="section-kicker">Sources</p>

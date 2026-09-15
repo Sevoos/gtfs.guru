@@ -506,3 +506,54 @@ footer > div:last-child a:hover { color: var(--text); }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: .01ms !important; }
 }
+
+/* Common causes: the list a reader scans to recognise their own situation. */
+.cause-list { display: grid; gap: .6rem; margin: 1.25rem 0 0; padding: 0 0 0 1.1rem; }
+.cause-list li { color: var(--muted); line-height: 1.6; }
+.cause-list li::marker { color: var(--accent); }
+
+.cross-check {
+  margin: 1.25rem 0 0;
+  padding: .85rem 1rem;
+  border-left: 2px solid var(--accent);
+  background: rgba(99, 199, 245, .07);
+  color: var(--muted);
+  line-height: 1.6;
+}
+.cross-check strong { color: var(--text); }
+
+/* The repair that silences the notice without fixing the data. It is called
+   out rather than buried, because it is usually the easier of the two. */
+.pitfall {
+  margin: 1.5rem 0 0;
+  padding: .85rem 1rem;
+  border-left: 2px solid var(--warning);
+  background: rgba(244, 201, 102, .08);
+  color: var(--muted);
+  line-height: 1.6;
+}
+.pitfall strong { color: var(--warning); }
+
+/* Step 3 says "validate again"; this is the way back to the validator. */
+.revalidate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .9rem;
+  margin: 1.75rem 0 0;
+}
+.revalidate span { color: var(--muted); font-size: .8rem; }
+.revalidate-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .6rem 1.1rem;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #05131f;
+  font-weight: 650;
+  font-size: .9rem;
+  text-decoration: none;
+}
+.revalidate-link::after { content: "→"; }
+.revalidate-link:hover { filter: brightness(1.08); }

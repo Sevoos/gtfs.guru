@@ -3,22 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A transit vehicle moves too fast between two far stops. — GTFS notice fast_travel_between_far_stops</title>
-  <meta name="description" content="A transit vehicle moves too fast between two far stops. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the…">
+  <title>Fix fast_travel_between_far_stops in GTFS | GTFS Guru</title>
+  <meta name="description" content="A transit vehicle moves too fast between two far stops. What the fast_travel_between_far_stops notice means, the files and fields it points at, and how to…">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://gtfs.guru/notices/fast_travel_between_far_stops/">
   <link rel="sitemap" type="application/xml" href="https://gtfs.guru/sitemap.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="GTFS Guru">
-  <meta property="og:title" content="A transit vehicle moves too fast between two far stops. — GTFS notice fast_travel_between_far_stops">
-  <meta property="og:description" content="A transit vehicle moves too fast between two far stops. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the…">
+  <meta property="og:title" content="Fix fast_travel_between_far_stops in GTFS | GTFS Guru">
+  <meta property="og:description" content="A transit vehicle moves too fast between two far stops. What the fast_travel_between_far_stops notice means, the files and fields it points at, and how to…">
   <meta property="og:url" content="https://gtfs.guru/notices/fast_travel_between_far_stops/">
   <meta property="og:image" content="https://gtfs.guru/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#07111f">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
   <link rel="stylesheet" href="/notices/notice.css">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://gtfs.guru/notices/fast_travel_between_far_stops/#article","@type":"TechArticle","about":{"@type":"Thing","name":"GTFS validation notice fast_travel_between_far_stops"},"author":{"@type":"Organization","name":"GTFS Guru","url":"https://gtfs.guru/"},"description":"A transit vehicle moves too fast between two far stops. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the…","headline":"A transit vehicle moves too fast between two far stops.","isAccessibleForFree":true,"mainEntityOfPage":"https://gtfs.guru/notices/fast_travel_between_far_stops/","publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://gtfs.guru/logo.png"},"name":"GTFS Guru","url":"https://gtfs.guru/"},"url":"https://gtfs.guru/notices/fast_travel_between_far_stops/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://gtfs.guru/","name":"GTFS Guru","position":1},{"@type":"ListItem","item":"https://gtfs.guru/notices/","name":"Notice codes","position":2},{"@type":"ListItem","item":"https://gtfs.guru/notices/fast_travel_between_far_stops/","name":"fast_travel_between_far_stops","position":3}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://gtfs.guru/notices/fast_travel_between_far_stops/#article","@type":"TechArticle","about":{"@type":"Thing","name":"GTFS validation notice fast_travel_between_far_stops"},"author":{"@type":"Organization","name":"GTFS Guru","url":"https://gtfs.guru/"},"description":"A transit vehicle moves too fast between two far stops. What the fast_travel_between_far_stops notice means, the files and fields it points at, and how to…","headline":"A transit vehicle moves too fast between two far stops.","isAccessibleForFree":true,"mainEntityOfPage":"https://gtfs.guru/notices/fast_travel_between_far_stops/","publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://gtfs.guru/logo.png"},"name":"GTFS Guru","url":"https://gtfs.guru/"},"url":"https://gtfs.guru/notices/fast_travel_between_far_stops/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://gtfs.guru/","name":"GTFS Guru","position":1},{"@type":"ListItem","item":"https://gtfs.guru/notices/","name":"Notice codes","position":2},{"@type":"ListItem","item":"https://gtfs.guru/notices/fast_travel_between_far_stops/","name":"fast_travel_between_far_stops","position":3}]}]}</script>
   <script src="/notices/notice.js" defer></script>
 </head>
 <body>
@@ -92,10 +92,11 @@
           <h2>How to fix it</h2>
           <p>Check for a wrong stop_id, misplaced stop coordinates, or a missing hour in the second stop time.</p>
           <ol class="steps">
-            <li><span>1</span><div><strong>Locate the record</strong><p>Open stop_times.txt and use the report fields below to find the exact row.</p></div></li>
-            <li><span>2</span><div><strong>Change the source data</strong><p>Check for a wrong stop_id, misplaced stop coordinates, or a missing hour in the second stop time.</p></div></li>
+            <li><span>1</span><div><strong>Locate the record</strong><p>Open <code>stop_times.txt</code> and use the report fields below to find the exact row.</p></div></li>
+            <li><span>2</span><div><strong>Change the source data</strong><p>Apply the repair described above to that record, and leave unrelated rows alone.</p></div></li>
             <li><span>3</span><div><strong>Validate again</strong><p>Rebuild the GTFS archive and confirm that <code>fast_travel_between_far_stops</code> no longer appears for the record.</p></div></li>
           </ol>
+          <p class="revalidate"><a class="revalidate-link" href="/#validator">Re-check your feed in the browser</a><span>Free, no upload for a file you pick.</span></p>
         </section>
         <section id="example">
           <p class="section-kicker">Worked example</p>

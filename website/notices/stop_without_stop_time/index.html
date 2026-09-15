@@ -3,22 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A stop in stops.txt is not referenced by any stop_times.stop_id. — GTFS notice stop_without_stop_time</title>
-  <meta name="description" content="A stop in stops.txt is not referenced by any stop_times.stop_id. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the…">
+  <title>Fix stop_without_stop_time in GTFS | GTFS Guru</title>
+  <meta name="description" content="A stop in stops.txt is not referenced by any stop_times.stop_id. What the stop_without_stop_time notice means, the files and fields it points at, and how to…">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://gtfs.guru/notices/stop_without_stop_time/">
   <link rel="sitemap" type="application/xml" href="https://gtfs.guru/sitemap.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="GTFS Guru">
-  <meta property="og:title" content="A stop in stops.txt is not referenced by any stop_times.stop_id. — GTFS notice stop_without_stop_time">
-  <meta property="og:description" content="A stop in stops.txt is not referenced by any stop_times.stop_id. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the…">
+  <meta property="og:title" content="Fix stop_without_stop_time in GTFS | GTFS Guru">
+  <meta property="og:description" content="A stop in stops.txt is not referenced by any stop_times.stop_id. What the stop_without_stop_time notice means, the files and fields it points at, and how to…">
   <meta property="og:url" content="https://gtfs.guru/notices/stop_without_stop_time/">
   <meta property="og:image" content="https://gtfs.guru/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#07111f">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
   <link rel="stylesheet" href="/notices/notice.css">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://gtfs.guru/notices/stop_without_stop_time/#article","@type":"TechArticle","about":{"@type":"Thing","name":"GTFS validation notice stop_without_stop_time"},"author":{"@type":"Organization","name":"GTFS Guru","url":"https://gtfs.guru/"},"description":"A stop in stops.txt is not referenced by any stop_times.stop_id. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the…","headline":"A stop in stops.txt is not referenced by any stop_times.stop_id.","isAccessibleForFree":true,"mainEntityOfPage":"https://gtfs.guru/notices/stop_without_stop_time/","publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://gtfs.guru/logo.png"},"name":"GTFS Guru","url":"https://gtfs.guru/"},"url":"https://gtfs.guru/notices/stop_without_stop_time/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://gtfs.guru/","name":"GTFS Guru","position":1},{"@type":"ListItem","item":"https://gtfs.guru/notices/","name":"Notice codes","position":2},{"@type":"ListItem","item":"https://gtfs.guru/notices/stop_without_stop_time/","name":"stop_without_stop_time","position":3}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://gtfs.guru/notices/stop_without_stop_time/#article","@type":"TechArticle","about":{"@type":"Thing","name":"GTFS validation notice stop_without_stop_time"},"author":{"@type":"Organization","name":"GTFS Guru","url":"https://gtfs.guru/"},"description":"A stop in stops.txt is not referenced by any stop_times.stop_id. What the stop_without_stop_time notice means, the files and fields it points at, and how to…","headline":"A stop in stops.txt is not referenced by any stop_times.stop_id.","isAccessibleForFree":true,"mainEntityOfPage":"https://gtfs.guru/notices/stop_without_stop_time/","publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://gtfs.guru/logo.png"},"name":"GTFS Guru","url":"https://gtfs.guru/"},"url":"https://gtfs.guru/notices/stop_without_stop_time/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://gtfs.guru/","name":"GTFS Guru","position":1},{"@type":"ListItem","item":"https://gtfs.guru/notices/","name":"Notice codes","position":2},{"@type":"ListItem","item":"https://gtfs.guru/notices/stop_without_stop_time/","name":"stop_without_stop_time","position":3}]}]}</script>
   <script src="/notices/notice.js" defer></script>
 </head>
 <body>
@@ -91,10 +91,11 @@
           <h2>How to fix it</h2>
           <p>Reference the stop from the intended trip, or remove the stops.txt row if the location is no longer published.</p>
           <ol class="steps">
-            <li><span>1</span><div><strong>Locate the record</strong><p>Open stops.txt / stop_times.txt and use the report fields below to find the exact row.</p></div></li>
-            <li><span>2</span><div><strong>Change the source data</strong><p>Reference the stop from the intended trip, or remove the stops.txt row if the location is no longer published.</p></div></li>
+            <li><span>1</span><div><strong>Locate the record</strong><p>Open <code>stops.txt</code> / <code>stop_times.txt</code> and use the report fields below to find the exact row.</p></div></li>
+            <li><span>2</span><div><strong>Change the source data</strong><p>Apply the repair described above to that record, and leave unrelated rows alone.</p></div></li>
             <li><span>3</span><div><strong>Validate again</strong><p>Rebuild the GTFS archive and confirm that <code>stop_without_stop_time</code> no longer appears for the record.</p></div></li>
           </ol>
+          <p class="revalidate"><a class="revalidate-link" href="/#validator">Re-check your feed in the browser</a><span>Free, no upload for a file you pick.</span></p>
         </section>
         <section id="example">
           <p class="section-kicker">Worked example</p>
@@ -105,7 +106,7 @@ stop_times.txt: no row references S_UNUSED</code></pre></div>
             <div><h3>After</h3><pre><code>stops.txt: S1,Terminal,35.17,33.36
 stop_times.txt: T1,08:00:00,08:00:00,S1,1</code></pre></div>
           </div>
-          <p class="example-note">Simplified example for <code>stops.txt / stop_times.txt</code>; keep all other required columns from your feed.</p>
+          <p class="example-note">Simplified example for <code>stops.txt</code> / <code>stop_times.txt</code>; keep all other required columns from your feed.</p>
         </section>
         <section id="references">
           <p class="section-kicker">Sources</p>

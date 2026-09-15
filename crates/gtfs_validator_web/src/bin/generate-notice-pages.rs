@@ -59,6 +59,18 @@ struct NoticeGuide {
     file: String,
     bad: String,
     good: String,
+    /// What actually produces this notice in a real feed. A reader who
+    /// recognises their own situation here stops guessing.
+    #[serde(default)]
+    causes: Vec<String>,
+    /// The repair that silences the notice without fixing the data. Every
+    /// notice with an obvious wrong answer should name it.
+    #[serde(default)]
+    pitfall: Option<String>,
+    /// Where to look besides the row the report points at — usually the other
+    /// side of a reference.
+    #[serde(default)]
+    cross_check: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -265,9 +277,12 @@ fn render_notice_page(
     let display_summary = summary.replace('`', "");
     let description = schema.description.as_deref().unwrap_or(summary);
     let canonical = format!("{BASE_URL}/notices/{}/", schema.code);
-    let title = format!("{display_summary} — GTFS notice {}", schema.code);
+    // The code is what people paste into a search box, and the thing they want
+    // is the repair — so both lead. The summary used to run first and pushed
+    // the code past the end of a title in a result list.
+    let title = format!("Fix {} in GTFS | GTFS Guru", schema.code);
     let meta_description = truncate_meta(&format!(
-        "{display_summary} Learn what GTFS Guru checks, which files and fields are affected, and how to fix the {} notice.",
+        "{display_summary} What the {} notice means, the files and fields it points at, and how to repair the feed.",
         schema.code
     ));
     let severity = severity_label(schema.severity_level);
@@ -392,7 +407,6 @@ fn render_notice_page(
         <a href="#meaning">What it means</a>
         <a href="#impact">Why it matters</a>
         <a href="#files">Files and fields</a>
-        <a href="#fix">How to fix</a>
 {}
         <a href="#references">References</a>
         <a href="#related">Related notices</a>
@@ -433,10 +447,18 @@ fn render_notice_page(
         },
         schema.properties.len(),
         if guide.is_some() { "Curated" } else { "Generated" },
-        if guide.is_some() {
-            r##"        <a href="#example">Example</a>"##
-        } else {
-            ""
+        {
+            // The list mirrors the article, so an optional section only shows
+            // up here when it was actually written.
+            let mut links = String::new();
+            if guide.is_some_and(|value| !value.causes.is_empty()) {
+                links.push_str("        <a href=\"#causes\">Common causes</a>\n");
+            }
+            links.push_str("        <a href=\"#fix\">How to fix</a>");
+            if guide.is_some() {
+                links.push_str("\n        <a href=\"#example\">Example</a>");
+            }
+            links
         },
         render_rich_text(description),
         escape_html(
@@ -498,12 +520,41 @@ fn render_notice_page(
 
     let first_step = format!(
         "<li><span>1</span><div><strong>Locate the record</strong><p>Open {} and use the report fields below to find the exact row.</p></div></li>",
-        escape_html(
+        render_file_label(
             guide
                 .map(|value| value.file.as_str())
                 .unwrap_or("the file named in the validation report")
         )
     );
+    // Common causes: the shortest route from "I have this notice" to "I know
+    // which of my situations this is".
+    if let Some(causes) = guide
+        .map(|value| value.causes.as_slice())
+        .filter(|c| !c.is_empty())
+    {
+        out.push_str(
+            r#"        <section id="causes">
+          <p class="section-kicker">Diagnosis</p>
+          <h2>What usually causes it</h2>
+          <ul class="cause-list">
+"#,
+        );
+        for cause in causes {
+            writeln!(out, "            <li>{}</li>", render_inline(cause))
+                .expect("write to string");
+        }
+        out.push_str("          </ul>\n");
+        if let Some(cross_check) = guide.and_then(|value| value.cross_check.as_deref()) {
+            writeln!(
+                out,
+                "          <p class=\"cross-check\"><strong>Check both sides.</strong> {}</p>",
+                render_inline(cross_check),
+            )
+            .expect("write to string");
+        }
+        out.push_str("        </section>\n");
+    }
+
     write!(
         out,
         r#"        <section id="fix">
@@ -512,10 +563,9 @@ fn render_notice_page(
           <p>{}</p>
           <ol class="steps">
             {}
-            <li><span>2</span><div><strong>Change the source data</strong><p>{}</p></div></li>
+            <li><span>2</span><div><strong>Change the source data</strong><p>Apply the repair described above to that record, and leave unrelated rows alone.</p></div></li>
             <li><span>3</span><div><strong>Validate again</strong><p>Rebuild the GTFS archive and confirm that <code>{}</code> no longer appears for the record.</p></div></li>
           </ol>
-        </section>
 "#,
         escape_html(
             guide
@@ -523,14 +573,27 @@ fn render_notice_page(
                 .unwrap_or("Use the evidence in the report to identify the failing record, then make the smallest source-data change that satisfies the rule."),
         ),
         first_step,
-        escape_html(
-            guide
-                .map(|value| value.fix.as_str())
-                .unwrap_or("Apply the requirement described above without changing unrelated rows."),
-        ),
         escape_html(&schema.code),
     )
     .expect("write to string");
+
+    // The repair that makes the notice disappear without fixing anything is
+    // usually easier than the real one, so it gets named explicitly.
+    if let Some(pitfall) = guide.and_then(|value| value.pitfall.as_deref()) {
+        writeln!(
+            out,
+            "          <p class=\"pitfall\"><strong>Do not do this:</strong> {}</p>",
+            render_inline(pitfall),
+        )
+        .expect("write to string");
+    }
+
+    // Step 3 asks the reader to validate again; this is the button that does it.
+    out.push_str(
+        r#"          <p class="revalidate"><a class="revalidate-link" href="/#validator">Re-check your feed in the browser</a><span>Free, no upload for a file you pick.</span></p>
+        </section>
+"#,
+    );
 
     if let Some(guide) = guide {
         write!(
@@ -542,12 +605,12 @@ fn render_notice_page(
             <div><h3>Before</h3><pre><code>{}</code></pre></div>
             <div><h3>After</h3><pre><code>{}</code></pre></div>
           </div>
-          <p class="example-note">Simplified example for <code>{}</code>; keep all other required columns from your feed.</p>
+          <p class="example-note">Simplified example for {}; keep all other required columns from your feed.</p>
         </section>
 "#,
             escape_html(&guide.bad),
             escape_html(&guide.good),
-            escape_html(&guide.file),
+            render_file_label(&guide.file),
         )
         .expect("write to string");
     }
@@ -1070,6 +1133,31 @@ fn render_rich_text(value: &str) -> String {
         out.push_str("</ul>\n");
     }
     out
+}
+
+/// A guide's `file` is sometimes a bare name (`stops.txt`), sometimes a pair
+/// (`stops.txt / stop_times.txt`), and sometimes a phrase for notices whose
+/// file is only known at validation time. Filenames are monospaced wherever
+/// they appear; the prose around them is not.
+fn render_file_label(value: &str) -> String {
+    let marked = value
+        .split(' ')
+        .map(|token| {
+            let trimmed = token.trim_end_matches([',', '.', ')', '…']);
+            if !trimmed.is_empty()
+                && (trimmed.ends_with(".txt") || trimmed.ends_with(".geojson"))
+                && !trimmed.contains('`')
+            {
+                let suffix = &token[trimmed.len()..];
+                let prefix_len = token.len() - trimmed.len() - suffix.len();
+                format!("{}`{trimmed}`{suffix}", &token[..prefix_len])
+            } else {
+                token.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    render_inline(&marked)
 }
 
 fn render_inline(value: &str) -> String {

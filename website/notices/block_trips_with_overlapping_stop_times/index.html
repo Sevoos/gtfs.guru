@@ -3,22 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Trips with the same block id have overlapping stop times. — GTFS notice block_trips_with_overlapping_stop_times</title>
-  <meta name="description" content="Trips with the same block id have overlapping stop times. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the…">
+  <title>Fix block_trips_with_overlapping_stop_times in GTFS | GTFS Guru</title>
+  <meta name="description" content="Trips with the same block id have overlapping stop times. What the block_trips_with_overlapping_stop_times notice means, the files and fields it points at,…">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/">
   <link rel="sitemap" type="application/xml" href="https://gtfs.guru/sitemap.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="GTFS Guru">
-  <meta property="og:title" content="Trips with the same block id have overlapping stop times. — GTFS notice block_trips_with_overlapping_stop_times">
-  <meta property="og:description" content="Trips with the same block id have overlapping stop times. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the…">
+  <meta property="og:title" content="Fix block_trips_with_overlapping_stop_times in GTFS | GTFS Guru">
+  <meta property="og:description" content="Trips with the same block id have overlapping stop times. What the block_trips_with_overlapping_stop_times notice means, the files and fields it points at,…">
   <meta property="og:url" content="https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/">
   <meta property="og:image" content="https://gtfs.guru/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#07111f">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
   <link rel="stylesheet" href="/notices/notice.css">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/#article","@type":"TechArticle","about":{"@type":"Thing","name":"GTFS validation notice block_trips_with_overlapping_stop_times"},"author":{"@type":"Organization","name":"GTFS Guru","url":"https://gtfs.guru/"},"description":"Trips with the same block id have overlapping stop times. Learn what GTFS Guru checks, which files and fields are affected, and how to fix the…","headline":"Trips with the same block id have overlapping stop times.","isAccessibleForFree":true,"mainEntityOfPage":"https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/","publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://gtfs.guru/logo.png"},"name":"GTFS Guru","url":"https://gtfs.guru/"},"url":"https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://gtfs.guru/","name":"GTFS Guru","position":1},{"@type":"ListItem","item":"https://gtfs.guru/notices/","name":"Notice codes","position":2},{"@type":"ListItem","item":"https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/","name":"block_trips_with_overlapping_stop_times","position":3}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/#article","@type":"TechArticle","about":{"@type":"Thing","name":"GTFS validation notice block_trips_with_overlapping_stop_times"},"author":{"@type":"Organization","name":"GTFS Guru","url":"https://gtfs.guru/"},"description":"Trips with the same block id have overlapping stop times. What the block_trips_with_overlapping_stop_times notice means, the files and fields it points at,…","headline":"Trips with the same block id have overlapping stop times.","isAccessibleForFree":true,"mainEntityOfPage":"https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/","publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://gtfs.guru/logo.png"},"name":"GTFS Guru","url":"https://gtfs.guru/"},"url":"https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://gtfs.guru/","name":"GTFS Guru","position":1},{"@type":"ListItem","item":"https://gtfs.guru/notices/","name":"Notice codes","position":2},{"@type":"ListItem","item":"https://gtfs.guru/notices/block_trips_with_overlapping_stop_times/","name":"block_trips_with_overlapping_stop_times","position":3}]}]}</script>
   <script src="/notices/notice.js" defer></script>
 </head>
 <body>
@@ -95,10 +95,11 @@
           <h2>How to fix it</h2>
           <p>Fix the stop times of one of the trips, move it to another block, or give the two trips services that do not run on the same dates.</p>
           <ol class="steps">
-            <li><span>1</span><div><strong>Locate the record</strong><p>Open stop_times.txt and use the report fields below to find the exact row.</p></div></li>
-            <li><span>2</span><div><strong>Change the source data</strong><p>Fix the stop times of one of the trips, move it to another block, or give the two trips services that do not run on the same dates.</p></div></li>
+            <li><span>1</span><div><strong>Locate the record</strong><p>Open <code>stop_times.txt</code> and use the report fields below to find the exact row.</p></div></li>
+            <li><span>2</span><div><strong>Change the source data</strong><p>Apply the repair described above to that record, and leave unrelated rows alone.</p></div></li>
             <li><span>3</span><div><strong>Validate again</strong><p>Rebuild the GTFS archive and confirm that <code>block_trips_with_overlapping_stop_times</code> no longer appears for the record.</p></div></li>
           </ol>
+          <p class="revalidate"><a class="revalidate-link" href="/#validator">Re-check your feed in the browser</a><span>Free, no upload for a file you pick.</span></p>
         </section>
         <section id="example">
           <p class="section-kicker">Worked example</p>

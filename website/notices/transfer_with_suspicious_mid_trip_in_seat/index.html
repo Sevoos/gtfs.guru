@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A trip id field from GTFS file transfers.txt with an in-seat transfer type references a stop that is not in the expected position in the trip&#39;s stop-times. — GTFS notice transfer_with_suspicious_mid_trip_in_seat</title>
+  <title>Fix transfer_with_suspicious_mid_trip_in_seat in GTFS | GTFS Guru</title>
   <meta name="description" content="A trip id field from GTFS file transfers.txt with an in-seat transfer type references a stop that is not in the expected position in the trip&#39;s stop-times.…">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://gtfs.guru/notices/transfer_with_suspicious_mid_trip_in_seat/">
   <link rel="sitemap" type="application/xml" href="https://gtfs.guru/sitemap.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="GTFS Guru">
-  <meta property="og:title" content="A trip id field from GTFS file transfers.txt with an in-seat transfer type references a stop that is not in the expected position in the trip&#39;s stop-times. — GTFS notice transfer_with_suspicious_mid_trip_in_seat">
+  <meta property="og:title" content="Fix transfer_with_suspicious_mid_trip_in_seat in GTFS | GTFS Guru">
   <meta property="og:description" content="A trip id field from GTFS file transfers.txt with an in-seat transfer type references a stop that is not in the expected position in the trip&#39;s stop-times.…">
   <meta property="og:url" content="https://gtfs.guru/notices/transfer_with_suspicious_mid_trip_in_seat/">
   <meta property="og:image" content="https://gtfs.guru/og-image.png">
@@ -57,7 +57,6 @@
         <a href="#impact">Why it matters</a>
         <a href="#files">Files and fields</a>
         <a href="#fix">How to fix</a>
-
         <a href="#references">References</a>
         <a href="#related">Related notices</a>
       </aside>
@@ -95,9 +94,10 @@
           <p>Use the evidence in the report to identify the failing record, then make the smallest source-data change that satisfies the rule.</p>
           <ol class="steps">
             <li><span>1</span><div><strong>Locate the record</strong><p>Open the file named in the validation report and use the report fields below to find the exact row.</p></div></li>
-            <li><span>2</span><div><strong>Change the source data</strong><p>Apply the requirement described above without changing unrelated rows.</p></div></li>
+            <li><span>2</span><div><strong>Change the source data</strong><p>Apply the repair described above to that record, and leave unrelated rows alone.</p></div></li>
             <li><span>3</span><div><strong>Validate again</strong><p>Rebuild the GTFS archive and confirm that <code>transfer_with_suspicious_mid_trip_in_seat</code> no longer appears for the record.</p></div></li>
           </ol>
+          <p class="revalidate"><a class="revalidate-link" href="/#validator">Re-check your feed in the browser</a><span>Free, no upload for a file you pick.</span></p>
         </section>
         <section id="references">
           <p class="section-kicker">Sources</p>

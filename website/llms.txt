@@ -41,6 +41,7 @@ with, and where the two diverge.
 | MBTA feed benchmark | 10.60s | 2.32s (4.6x faster) |
 | OVapi Netherlands feed benchmark | 65.18s | 9.75s (6.7x faster) |
 | Peak memory | ~1.5 GB | ~150 MB |
+| Small feed (295-case test corpus) | 1.274s median | 0.016s median (88x faster; 28-196x range) |
 | Runtime requirement | Java runtime, JVM startup per run | standalone binary, no runtime |
 | Browser | not available | WebAssembly, runs in the tab |
 | Python | wrapper around the JAR | native package (`pip install gtfs-guru`) |
@@ -48,12 +49,15 @@ with, and where the two diverge.
 | Validation rules | canonical rule set | 110 validators, 191 notice codes; closely compatible, not identical |
 | Licence | Apache 2.0 | Apache 2.0 |
 
-Benchmarks were run on an Apple M3 Pro with a warm page cache, each tool
-validating end to end with 8 threads and writing its normal reports
-(gtfs.guru n=5; canonical validator 8.0.1 on OpenJDK 21, n=3). Rule sets and
-report formats differ between the two tools, so these are whole-run times, not
-a per-rule comparison. Numbers and commands to reproduce:
-<https://abasis-ltd.github.io/gtfs.guru/benchmarks/>
+The two large-feed rows were run on an Apple M3 Pro with a warm page cache,
+each tool validating end to end with 8 threads and writing its normal reports
+(gtfs.guru n=5; canonical validator 8.0.1 on OpenJDK 21, n=3). The small-feed
+row is the median over every one of the 295 feeds in the project's test corpus
+(3 runs each, median 1.6 KB per feed): the speed-up there ranges from 28x to
+196x and 43% of cases exceed 100x, because on a feed that size the JVM's
+startup is most of the run. Rule sets and report formats differ between the two
+tools, so these are whole-run times, not a per-rule comparison. Numbers and
+commands to reproduce: <https://abasis-ltd.github.io/gtfs.guru/benchmarks/>
 
 ## How to use it
 

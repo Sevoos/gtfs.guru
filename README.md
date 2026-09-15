@@ -206,6 +206,11 @@ Apple M3 Pro, warm page cache, each tool writing its normal report files:
 | MBTA Boston | 5.4M | **2.32 s** | 6.13 s | 10.60 s |
 | OVapi NL | 16.0M | **9.75 s** | 21.66 s | 65.18 s |
 
+On the small feeds in `test-gtfs-feeds/` (295 cases, median 1.6 KB), where JVM
+startup is most of the run rather than the validation work, the gap against the
+canonical validator widens to a median of **88x** (28-196x; 43% of cases above
+100x).
+
 Setup, caveats, and commands to reproduce: [**benchmarks**](docs/benchmarks.md).
 
 ## How the pieces fit

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Free GTFS Validator — Check Feeds Locally | GTFS Guru</title>
     <meta name="description"
-        content="Free, open-source GTFS validator. Check schedules, stops and routes for errors and get a report naming the file, row and field to fix. A file you pick is validated in your browser.">
+        content="Free, open-source GTFS validator. Check schedules, stops and routes for errors and get a report naming the file, row and field to fix — a median 88x faster than the canonical Java validator on a small feed.">
     <link rel="canonical" href="https://gtfs.guru/">
     <link rel="sitemap" type="application/xml" title="Sitemap" href="https://gtfs.guru/sitemap.xml">
     <meta name="robots" content="index, follow">
@@ -16,7 +16,7 @@
     <meta property="og:site_name" content="GTFS Guru">
     <meta property="og:title" content="Free GTFS Validator — Check Feeds Locally | GTFS Guru">
     <meta property="og:description"
-        content="Free, open-source GTFS validator. Check schedules, stops and routes for errors and get a report naming the file, row and field to fix. A file you pick is validated in your browser.">
+        content="Free, open-source GTFS validator. Check schedules, stops and routes for errors and get a report naming the file, row and field to fix — a median 88x faster than the canonical Java validator on a small feed.">
     <meta property="og:image" content="https://gtfs.guru/og-image.png">
     <meta property="og:url" content="https://gtfs.guru/">
 
@@ -24,7 +24,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Free GTFS Validator — Check Feeds Locally | GTFS Guru">
     <meta name="twitter:description"
-        content="Free, open-source GTFS validator. Check schedules, stops and routes for errors and get a report naming the file, row and field to fix. A file you pick is validated in your browser.">
+        content="Free, open-source GTFS validator. Check schedules, stops and routes for errors and get a report naming the file, row and field to fix — a median 88x faster than the canonical Java validator on a small feed.">
     <meta name="twitter:image" content="https://gtfs.guru/og-image.png">
     <meta name="theme-color" content="#0f172a">
 
@@ -68,6 +68,7 @@
         "description": "A free, open-source GTFS validator written in Rust. Validates transit feeds in the browser via WebAssembly, on the desktop, from the command line, from Python, or in CI, and reports the file, row and field behind every finding.",
         "featureList": [
           "110 validation checks emitting 191 distinct notice codes",
+          "Median 88x faster than the canonical Java validator on a small feed; 4.6-6.7x on large published benchmarks",
           "A feed you pick from your device is validated in the browser and never uploaded",
           "Browser validation via WebAssembly, no installation required",
           "Desktop app for macOS, Windows and Linux",
@@ -121,7 +122,7 @@
             "name": "How is GTFS Guru different from the canonical Java validator?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "It is a separate Rust implementation inspired by the canonical Java validator, not a port of it. The report shape and the notice codes are closely compatible, but the rule sets are not identical — the compatibility page lists exactly where they diverge. On speed, published benchmarks on an Apple M3 Pro with a warm page cache measure 4.6–6.7x faster than the canonical Java validator: 2.32s versus 10.60s on the MBTA feed and 9.75s versus 65.18s on the OVapi Netherlands feed, using roughly 150 MB of memory instead of 1.5 GB. Rule sets and report formats differ between the two, so that is a whole-run comparison rather than a per-rule one. It also runs where the Java validator cannot: in a web browser and as a native Python package."
+              "text": "It is a separate Rust implementation inspired by the canonical Java validator, not a port of it. The report shape and the notice codes are closely compatible, but the rule sets are not identical — the compatibility page lists exactly where they diverge. On speed, published benchmarks on an Apple M3 Pro with a warm page cache measure 4.6–6.7x faster than the canonical Java validator on large feeds: 2.32s versus 10.60s on the MBTA feed and 9.75s versus 65.18s on the OVapi Netherlands feed, using roughly 150 MB of memory instead of 1.5 GB. On small feeds the gap is much wider, because JVM startup is most of the run: across the project's 295-feed test corpus the median speed-up is 88x, 43% of cases exceed 100x and the widest is 196x. Rule sets and report formats differ between the two, so these are whole-run comparisons rather than per-rule ones. It also runs where the Java validator cannot: in a web browser and as a native Python package."
             }
           },
           {
@@ -430,8 +431,8 @@
                         <span class="stat-label">uploaded for a file you pick</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-number">4.6–6.7</span><span class="stat-suffix">x</span>
-                        <span class="stat-label"><a href="#comparison">faster on published benchmarks</a></span>
+                        <span class="stat-number">88</span><span class="stat-suffix">x</span>
+                        <span class="stat-label"><a href="#comparison">median speed-up on a small feed</a></span>
                     </div>
                 </div>
             </div>
@@ -617,6 +618,11 @@
                         <td class="col-new highlight">9.75s (6.7x faster)</td>
                     </tr>
                     <tr class="comparison-row">
+                        <th scope="row" class="col-feature">Small feed<br><span class="col-note">295-case test corpus, median 1.6&nbsp;KB</span></th>
+                        <td class="col-old">1.274s</td>
+                        <td class="col-new highlight">0.016s (88x faster, median)</td>
+                    </tr>
+                    <tr class="comparison-row">
                         <th scope="row" class="col-feature">Memory use<br><span class="col-note">peak, OVapi NL run</span></th>
                         <td class="col-old">~1.5GB RAM</td>
                         <td class="col-new highlight">~150MB RAM</td>
@@ -644,10 +650,13 @@
                 </tbody>
             </table>
             <p class="benchmark-note">
-                Measured on an Apple M3 Pro with a warm page cache, both tools running their full pipeline with
-                8 threads and writing their normal report files (gtfs.guru n=5, canonical validator 8.0.1 n=3 under
-                OpenJDK 21). Rule sets and report formats differ between the two, so this is a whole-run comparison,
-                not a per-rule one — your own numbers will depend on your feed and machine.
+                Large-feed rows: Apple&nbsp;M3&nbsp;Pro, warm page cache, both tools running their full pipeline
+                with 8 threads and writing their normal report files (gtfs.guru n=5, canonical validator 8.0.1 n=3
+                under OpenJDK&nbsp;21). Small-feed row: every one of the 295 feeds in the project's test corpus, 3
+                runs each, median kept — across them the speed-up ranges from 28x to 196x, and 43% of the cases are
+                at or above 100x, because on a feed this size the JVM's startup is most of the run. Rule sets and
+                report formats differ between the two tools, so these are whole-run comparisons, not per-rule ones —
+                your own numbers will depend on your feed and machine.
                 <a href="https://abasis-ltd.github.io/gtfs.guru/benchmarks/">Full method and commands to reproduce</a>.
             </p>
         </div>
@@ -814,9 +823,12 @@ gtfs-guru --stdout -i feed.zip | jq .</code></pre>
                             not identical — <a href="compatibility/" style="color: var(--accent-primary);">the
                             compatibility page</a> lists where they diverge. On speed, published benchmarks
                             (Apple&nbsp;M3&nbsp;Pro, warm page cache, 8 threads) measure 4.6–6.7x faster than the
-                            canonical validator 8.0.1: 2.32s versus 10.60s on the MBTA feed and 9.75s versus 65.18s on
-                            the OVapi Netherlands feed, using roughly 150&nbsp;MB of memory instead of 1.5&nbsp;GB. It
-                            also runs where the Java validator cannot: in a web browser and as a native Python package.
+                            canonical validator 8.0.1 on large feeds: 2.32s versus 10.60s on the MBTA feed and 9.75s
+                            versus 65.18s on the OVapi Netherlands feed, using roughly 150&nbsp;MB of memory instead
+                            of 1.5&nbsp;GB. On small feeds the gap is much wider, because JVM startup is most of the
+                            run: across the project's 295-feed test corpus the median speed-up is 88x, 43% of cases
+                            exceed 100x and the widest is 196x. It also runs where the Java validator cannot: in a
+                            web browser and as a native Python package.
                         </p>
                     </div>
                     <div>

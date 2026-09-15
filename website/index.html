@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTFS Guru | Fast, Private GTFS Validation</title>
+    <title>Free GTFS Validator — Check Feeds Locally | GTFS Guru</title>
     <meta name="description"
-        content="Validate GTFS feeds locally with GTFS Guru. Open source, private, up to 100x faster on small feeds, and 4.6–6.7x faster on published large-feed benchmarks.">
+        content="Free, open-source GTFS validator. Check schedules, stops and routes for errors and get a report naming the file, row and field to fix. A file you pick is validated in your browser.">
     <link rel="canonical" href="https://gtfs.guru/">
     <link rel="sitemap" type="application/xml" title="Sitemap" href="https://gtfs.guru/sitemap.xml">
     <meta name="robots" content="index, follow">
@@ -14,17 +14,17 @@
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="GTFS Guru">
-    <meta property="og:title" content="GTFS Guru | Fast, Private GTFS Validation">
+    <meta property="og:title" content="Free GTFS Validator — Check Feeds Locally | GTFS Guru">
     <meta property="og:description"
-        content="Validate GTFS feeds locally with GTFS Guru. Open source, private, up to 100x faster on small feeds, and 4.6–6.7x faster on published large-feed benchmarks.">
+        content="Free, open-source GTFS validator. Check schedules, stops and routes for errors and get a report naming the file, row and field to fix. A file you pick is validated in your browser.">
     <meta property="og:image" content="https://gtfs.guru/og-image.png">
     <meta property="og:url" content="https://gtfs.guru/">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="GTFS Guru | Fast, Private GTFS Validation">
+    <meta name="twitter:title" content="Free GTFS Validator — Check Feeds Locally | GTFS Guru">
     <meta name="twitter:description"
-        content="Validate GTFS feeds locally with GTFS Guru. Open source, private, up to 100x faster on small feeds, and 4.6–6.7x faster on published large-feed benchmarks.">
+        content="Free, open-source GTFS validator. Check schedules, stops and routes for errors and get a report naming the file, row and field to fix. A file you pick is validated in your browser.">
     <meta name="twitter:image" content="https://gtfs.guru/og-image.png">
     <meta name="theme-color" content="#0f172a">
 
@@ -65,10 +65,10 @@
         "softwareVersion": "1.0.0",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
         "isAccessibleForFree": true,
-        "description": "A native GTFS validator written in Rust. Validates transit feeds locally — in the browser via WebAssembly, on the desktop, from the command line, from Python, or in CI — without uploading the feed anywhere.",
+        "description": "A free, open-source GTFS validator written in Rust. Validates transit feeds in the browser via WebAssembly, on the desktop, from the command line, from Python, or in CI, and reports the file, row and field behind every finding.",
         "featureList": [
           "110 validation checks emitting 191 distinct notice codes",
-          "Runs entirely on the user's device; feeds are never uploaded",
+          "A feed you pick from your device is validated in the browser and never uploaded",
           "Browser validation via WebAssembly, no installation required",
           "Desktop app for macOS, Windows and Linux",
           "Command-line binary with SARIF, JSON and HTML reports",
@@ -113,7 +113,7 @@
             "name": "Is my transit data safe when I validate it?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Your data never leaves your computer. We use WebAssembly (WASM) to run the validator directly in your browser. Our desktop and CLI tools also process everything locally. We don't upload, store, or even see your files."
+              "text": "A file you choose or drop is read by your browser and validated there by WebAssembly — it is never uploaded, and we never see it. The desktop app and CLI work the same way. One case differs: if you validate by URL and the feed host blocks your browser's direct download, the page retries through gtfs.guru, so the archive passes through our server in memory for that one request before your browser validates it. The privacy policy spells both paths out."
             }
           },
           {
@@ -121,7 +121,7 @@
             "name": "How is GTFS Guru different from the canonical Java validator?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "GTFS Guru is built for speed. It can be up to 100x faster on small feeds where JVM startup dominates, while published large-feed benchmarks measure it at 4.6–6.7x faster than the canonical Java validator: 2.32s versus 10.60s on the MBTA feed and 9.75s versus 65.18s on the OVapi Netherlands feed, using roughly 150 MB of memory instead of 1.5 GB. It also runs where the Java validator cannot: in a web browser and as a native Python package."
+              "text": "It is a separate Rust implementation inspired by the canonical Java validator, not a port of it. The report shape and the notice codes are closely compatible, but the rule sets are not identical — the compatibility page lists exactly where they diverge. On speed, published benchmarks on an Apple M3 Pro with a warm page cache measure 4.6–6.7x faster than the canonical Java validator: 2.32s versus 10.60s on the MBTA feed and 9.75s versus 65.18s on the OVapi Netherlands feed, using roughly 150 MB of memory instead of 1.5 GB. Rule sets and report formats differ between the two, so that is a whole-run comparison rather than a per-rule one. It also runs where the Java validator cannot: in a web browser and as a native Python package."
             }
           },
           {
@@ -189,19 +189,26 @@
 
 
             <div class="nav-links" id="nav-links">
-                <a href="index.html#validator">Web Validator</a>
-
-                <a href="index.html#faq">FAQ</a>
+                <a href="/#validator">Validator</a>
                 <a href="faq.html">Guides</a>
-                <a href="notices/">Notice codes</a>
-                <a href="compatibility/">Compatibility</a>
-                <a href="contact.html">Contact</a>
-                <a href="index.html#developers">Developers</a>
+                <!-- Notice codes and compatibility are one topic for a reader:
+                     "what does this code mean and which spec does it answer
+                     for". Two separate bar links spent attention on that
+                     distinction before anyone had validated anything. -->
+                <details class="nav-dropdown">
+                    <summary>Documentation</summary>
+                    <div class="nav-dropdown-panel">
+                        <a href="notices/">Notice codes</a>
+                        <a href="compatibility/">Compatibility</a>
+                        <a href="/#faq">FAQ</a>
+                    </div>
+                </details>
+                <a href="/#developers">Developers</a>
                 <a href="https://github.com/abasis-ltd/gtfs.guru" target="_blank">GitHub</a>
-                <a href="#download" class="nav-mobile-cta">Get the App</a>
+                <a href="#download" class="nav-mobile-cta">Get the desktop app</a>
             </div>
             <div class="nav-actions">
-                <a href="#download" class="btn btn-primary">Get the App</a>
+                <a href="/#validator" class="btn btn-primary">Validate a feed</a>
                 <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Open menu"
                     aria-expanded="false" aria-controls="nav-links">
                     <i data-lucide="menu"></i>
@@ -214,46 +221,33 @@
         <div class="container hero-container">
             <div class="hero-content">
                 <div class="badge-row">
-                    <div class="badge">Open Source</div>
-                    <div class="badge ml-2"><i data-lucide="shield"></i> 100% Local & Secure</div>
+                    <div class="badge">Free &amp; open source</div>
+                    <div class="badge ml-2"><i data-lucide="shield"></i> Files you pick stay in your browser</div>
                 </div>
-                <h1>Ensure your transit data is <span class="gradient-text">Production Ready</span></h1>
+                <h1>Validate your GTFS feed. <span class="gradient-text">Know what to fix.</span></h1>
                 <p class="hero-sub">
-                    Catch errors before they reach Google Maps. 4.6–6.7x faster than the canonical Java validator on published benchmarks.
-                    Runs entirely on your device — your data never leaves your computer.
+                    Check schedules, stops and routes for errors before publication. You get a report that
+                    names the affected file, row and field for every issue — and what to change.
                 </p>
 
                 <div class="hero-actions">
-                    <a href="#download" class="btn btn-primary btn-lg">
-                        <i data-lucide="download"></i> Download for Desktop
+                    <a href="#validator" class="btn btn-primary btn-lg">
+                        <i data-lucide="check-circle"></i> Validate a feed
                     </a>
-                    <a href="#validator" class="btn btn-secondary btn-lg">
-                        <i data-lucide="zap"></i> Try Online
+                    <button type="button" class="btn btn-secondary btn-lg" id="hero-demo-btn">
+                        <i data-lucide="play-circle"></i> Try an example
+                    </button>
+                    <a href="#download" class="btn btn-ghost btn-lg">
+                        <i data-lucide="download"></i> Download desktop app
                     </a>
-                </div>
-
-                <div class="stats-row">
-                    <div class="stat-item">
-                        <span class="stat-prefix">Up to</span>
-                        <span class="stat-number">100</span><span class="stat-suffix">x</span>
-                        <span class="stat-label">Faster on Small Feeds</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number">110</span>
-                        <span class="stat-label"><a href="notices/">Checks, 191 notice codes</a></span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number">0</span><span class="stat-suffix">kb</span>
-                        <span class="stat-label">Data Uploaded</span>
-                    </div>
                 </div>
             </div>
 
             <div class="hero-visual" id="validator">
                 <div class="validator-ui glass-card" id="drop-zone">
                     <div class="validator-header">
-                        <span class="window-title">Browser Validator (WASM)</span>
-                        <div class="secure-badge" title="Processing happens in your browser"><i data-lucide="lock"
+                        <span class="window-title">Validate in your browser</span>
+                        <div class="secure-badge" title="A file you pick is read and validated inside this tab"><i data-lucide="lock"
                                 style="width:12px"></i> Local</div>
                     </div>
                     <div class="validator-body">
@@ -270,29 +264,44 @@
                         </div>
 
                         <div id="validate-inputs">
+                            <!-- The drop zone stays a drop zone, but the real
+                                 control is the button inside it: a clickable
+                                 <div> around a hidden file input is not
+                                 reachable by Tab, which locked keyboard users
+                                 out of the primary path through the product. -->
                             <div class="upload-state" id="upload-state">
-                                <i data-lucide="upload-cloud" class="upload-icon"></i>
-                                <h3>Drop GTFS.zip here</h3>
-                                <p class="sub-text">or click to browse</p>
+                                <i data-lucide="upload-cloud" class="upload-icon" aria-hidden="true"></i>
+                                <h3>Drop a GTFS.zip here</h3>
+                                <button type="button" class="btn btn-primary" id="choose-file-btn">
+                                    <i data-lucide="folder-open"></i> Choose GTFS ZIP
+                                </button>
+                                <p class="sub-text upload-limit-note">Up to 150&nbsp;MB zipped / 700&nbsp;MB unpacked.
+                                    Larger feeds: use the <a href="#download">desktop app</a> or the CLI.</p>
                                 <input type="file" id="file-input" accept=".zip" hidden>
-                            </div>
-
-                            <div class="url-input-container" id="url-input-container" style="margin-top: 1rem;">
-                                <div style="display: flex; gap: 8px;">
-                                    <input type="text" id="url-input" placeholder="Enter URL or path..."
-                                        style="flex-grow: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.6rem 1rem; color: #fff; font-family: var(--font-body); font-size: 0.9rem;">
-                                    <button id="url-analyze-btn" class="btn btn-primary"
-                                        style="padding: 0.6rem 1rem; white-space: nowrap;">
-                                        Analyze
-                                    </button>
-                                </div>
                             </div>
 
                             <div class="demo-row" id="demo-row">
                                 <span class="sub-text">No feed to hand?</span>
-                                <button type="button" class="btn btn-ghost btn-sm" id="try-demo-btn">
-                                    <i data-lucide="play-circle"></i> Try an example feed
+                                <button type="button" class="btn btn-secondary btn-sm" id="try-demo-btn">
+                                    <i data-lucide="play-circle"></i> Validate an example feed
                                 </button>
+                            </div>
+
+                            <div class="url-input-container" id="url-input-container">
+                                <label class="url-label" for="url-input">Or validate a feed published at a URL</label>
+                                <div class="url-input-row">
+                                    <input type="url" id="url-input" placeholder="https://example.com/gtfs.zip"
+                                        autocomplete="off" spellcheck="false"
+                                        aria-describedby="url-input-hint">
+                                    <button id="url-analyze-btn" class="btn btn-primary" type="button">
+                                        Validate
+                                    </button>
+                                </div>
+                                <p class="sub-text url-hint" id="url-input-hint">
+                                    The browser downloads the archive first. If the host blocks that, gtfs.guru fetches
+                                    it for you — so a URL feed passes through our server, unlike a file you pick.
+                                    <a href="privacy.html">How URL validation handles data</a>.
+                                </p>
                             </div>
                         </div>
 
@@ -320,7 +329,7 @@
 
                         <div class="processing-state hidden" id="processing-state">
                             <div class="spinner"></div>
-                            <p id="processing-title">Validating locally (WASM)...</p>
+                            <p id="processing-title">Validating in your browser…</p>
                             <p class="sub-text" id="processing-detail">Large feeds (50&nbsp;MB+) can take a minute or two</p>
                         </div>
 
@@ -332,38 +341,25 @@
                                     Validate my own feed
                                 </button>
                             </div>
-                            <div class="completion-indicator">
-                                <div class="completion-icon">
+                            <!-- The verdict is written from the counts, never
+                                 fixed in markup. A green tick over five errors
+                                 reads as "your feed passed" and is the single
+                                 most misleading thing this page could say. -->
+                            <div class="completion-indicator" id="completion-indicator">
+                                <div class="completion-icon" id="completion-icon">
                                     <i data-lucide="check-circle"></i>
                                 </div>
-                                <span class="completion-text">Scan Complete</span>
+                                <span class="completion-text" id="completion-text">Validation complete</span>
+                                <span class="completion-sub" id="completion-sub"></span>
                             </div>
                             <div class="stats-grid">
                                 <div class="stat"><span class="red" id="error-count">0</span> Errors</div>
                                 <div class="stat"><span class="yellow" id="warning-count">0</span> Warnings</div>
                             </div>
-                            <section class="mcp-preview" id="mcp-preview" aria-labelledby="mcp-preview-title"
-                                aria-live="polite">
-                                <div class="mcp-preview-header">
-                                    <div class="mcp-preview-heading">
-                                        <i data-lucide="sparkles"></i>
-                                        <div>
-                                            <span class="mcp-preview-kicker">MCP preview</span>
-                                            <h3 id="mcp-preview-title">What ChatGPT receives</h3>
-                                        </div>
-                                    </div>
-                                    <span class="mcp-local-label"><i data-lucide="lock"></i> Local</span>
-                                </div>
-                                <div id="mcp-preview-body"></div>
-                                <div class="mcp-preview-footer">
-                                    <span>Built from validator facts. No AI request was made.</span>
-                                    <button type="button" class="connect-link" data-open-connect>Connect via MCP <i
-                                            data-lucide="arrow-right"></i></button>
-                                </div>
-                            </section>
+                            <section class="result-issues" id="result-issues" aria-label="Issues found"></section>
                             <div class="result-actions">
                                 <button class="btn btn-primary" id="view-report-btn">
-                                    <i data-lucide="file-text"></i> See More
+                                    <i data-lucide="file-text"></i> View all issues
                                 </button>
                                 <button class="btn btn-outline" id="download-html-btn">
                                     <i data-lucide="file-code"></i> Full Report
@@ -375,9 +371,32 @@
                                     <i data-lucide="share-2"></i> Share
                                 </button>
                                 <button class="btn btn-ghost" id="reset-btn">
-                                    <i data-lucide="rotate-ccw"></i> New Scan
+                                    <i data-lucide="rotate-ccw"></i> Validate another feed
                                 </button>
                             </div>
+                            <!-- Below the report and the actions on purpose:
+                                 a reader here wants to fix a file, not to set
+                                 up an assistant integration. -->
+                            <details class="mcp-preview" id="mcp-preview">
+                                <summary class="mcp-preview-summary">
+                                    <span class="mcp-preview-heading">
+                                        <i data-lucide="sparkles"></i>
+                                        <span>
+                                            <span class="mcp-preview-kicker">Optional</span>
+                                            <span class="mcp-preview-title">Ask an AI assistant about this feed</span>
+                                        </span>
+                                    </span>
+                                    <span class="mcp-local-label"><i data-lucide="lock"></i> Local</span>
+                                </summary>
+                                <div class="mcp-preview-inner">
+                                    <div id="mcp-preview-body"></div>
+                                    <div class="mcp-preview-footer">
+                                        <span>Built from validator facts. No AI request was made.</span>
+                                        <button type="button" class="connect-link" data-open-connect>Connect via MCP <i
+                                                data-lucide="arrow-right"></i></button>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
 
                         <div class="diff-result-state hidden" id="diff-result-state">
@@ -398,6 +417,21 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <span class="stat-number">110</span>
+                        <span class="stat-label"><a href="notices/">checks, 191 notice codes</a></span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">0</span><span class="stat-suffix">kb</span>
+                        <span class="stat-label">uploaded for a file you pick</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">4.6–6.7</span><span class="stat-suffix">x</span>
+                        <span class="stat-label"><a href="#comparison">faster on published benchmarks</a></span>
                     </div>
                 </div>
             </div>
@@ -508,11 +542,57 @@
         </div>
     </header>
 
+    <section id="what-we-check" class="checks-section">
+        <div class="container">
+            <div class="section-header">
+                <h2>What the report checks</h2>
+                <p>110 validators over the whole feed, each finding reported with the file, row and field behind it.</p>
+            </div>
+            <div class="checks-grid">
+                <div class="check-card glass-card">
+                    <h3>Structure</h3>
+                    <p>Required files and columns are present, the archive parses as CSV, and no required value is
+                        blank.</p>
+                </div>
+                <div class="check-card glass-card">
+                    <h3>References</h3>
+                    <p>Every <code>trip_id</code>, <code>stop_id</code>, <code>route_id</code> and
+                        <code>service_id</code> resolves to a row that actually exists.</p>
+                </div>
+                <div class="check-card glass-card">
+                    <h3>Schedules</h3>
+                    <p>Times are valid and move forward along each trip, service periods are the right way round,
+                        and calendars still cover the dates you publish.</p>
+                </div>
+                <div class="check-card glass-card">
+                    <h3>Geography</h3>
+                    <p>Coordinates are plausible, stops sit near the shape that serves them, and travel between
+                        consecutive stops is physically possible.</p>
+                </div>
+                <div class="check-card glass-card">
+                    <h3>Presentation</h3>
+                    <p>Route names, colours, contrast, URLs and phone numbers are the ones riders will actually
+                        see in an app.</p>
+                </div>
+                <div class="check-card glass-card">
+                    <h3>Fares and pathways</h3>
+                    <p>Fares&nbsp;v2 products and transfer rules, station hierarchies and in-station pathways hold
+                        together.</p>
+                </div>
+            </div>
+            <p class="checks-footnote">
+                Every check has a page explaining what it means and how to repair it.
+                <a href="notices/">Browse all 191 notice codes</a>.
+            </p>
+        </div>
+    </section>
+
     <section id="comparison" class="comparison-section">
         <div class="container">
             <div class="section-header">
-                <h2>Why Switch to GTFS Guru?</h2>
-                <p>Same rules and notice codes as the canonical Java validator, rewritten in Rust.</p>
+                <h2>How it compares with the canonical Java validator</h2>
+                <p>A separate Rust implementation with closely compatible notice codes — the rule sets are
+                    not identical. <a href="compatibility/">See exactly where they differ</a>.</p>
             </div>
             <!-- A real <table>: "X vs Y" answers are extracted from table markup,
                  and a CSS grid of <div>s carries none of that structure. -->
@@ -527,27 +607,32 @@
                 </thead>
                 <tbody>
                     <tr class="comparison-row">
-                        <th scope="row" class="col-feature">MBTA benchmark</th>
+                        <th scope="row" class="col-feature">MBTA Boston<br><span class="col-note">38&nbsp;MB zip, 5.4M stop_times rows</span></th>
                         <td class="col-old">10.60s</td>
                         <td class="col-new highlight">2.32s (4.6x faster)</td>
                     </tr>
                     <tr class="comparison-row">
-                        <th scope="row" class="col-feature">OVapi NL benchmark</th>
+                        <th scope="row" class="col-feature">OVapi Netherlands<br><span class="col-note">198&nbsp;MB zip, 16.0M stop_times rows</span></th>
                         <td class="col-old">65.18s</td>
                         <td class="col-new highlight">9.75s (6.7x faster)</td>
                     </tr>
                     <tr class="comparison-row">
-                        <th scope="row" class="col-feature">Memory Usage</th>
+                        <th scope="row" class="col-feature">Memory use<br><span class="col-note">peak, OVapi NL run</span></th>
                         <td class="col-old">~1.5GB RAM</td>
                         <td class="col-new highlight">~150MB RAM</td>
                     </tr>
                     <tr class="comparison-row">
-                        <th scope="row" class="col-feature">Privacy</th>
-                        <td class="col-old">Local code / Cloud validator</td>
-                        <td class="col-new highlight">Local App / Working in your browser</td>
+                        <th scope="row" class="col-feature">Rule set</th>
+                        <td class="col-old">Canonical reference</td>
+                        <td class="col-new">Closely compatible, <a href="compatibility/">not identical</a></td>
                     </tr>
                     <tr class="comparison-row">
-                        <th scope="row" class="col-feature">Python Support</th>
+                        <th scope="row" class="col-feature">Where it runs</th>
+                        <td class="col-old">JVM: CLI, desktop, hosted service</td>
+                        <td class="col-new highlight">Browser, desktop, CLI, Python, CI</td>
+                    </tr>
+                    <tr class="comparison-row">
+                        <th scope="row" class="col-feature">Python support</th>
                         <td class="col-old">Wrapper only</td>
                         <td class="col-new highlight">Native (<code>pip install</code>)</td>
                     </tr>
@@ -558,6 +643,13 @@
                     </tr>
                 </tbody>
             </table>
+            <p class="benchmark-note">
+                Measured on an Apple M3 Pro with a warm page cache, both tools running their full pipeline with
+                8 threads and writing their normal report files (gtfs.guru n=5, canonical validator 8.0.1 n=3 under
+                OpenJDK 21). Rule sets and report formats differ between the two, so this is a whole-run comparison,
+                not a per-rule one — your own numbers will depend on your feed and machine.
+                <a href="https://abasis-ltd.github.io/gtfs.guru/benchmarks/">Full method and commands to reproduce</a>.
+            </p>
         </div>
     </section>
 
@@ -705,18 +797,24 @@ gtfs-guru --stdout -i feed.zip | jq .</code></pre>
                         <h3 style="margin-bottom: 0.5rem; color: var(--accent-primary);">Is my transit data safe when
                             I validate it?</h3>
                         <p style="color: var(--text-secondary); font-size: 1.05rem; line-height: 1.6;">
-                            Your data never leaves your computer. We use WebAssembly (WASM) to run the validator
-                            directly in your browser. Our desktop and CLI tools also process everything locally. We
-                            don't upload, store, or even see your files.
+                            A file you choose or drop is read by your browser and validated there by WebAssembly —
+                            it is never uploaded, and we never see it. The desktop app and CLI work the same way.
+                            One case differs: if you validate <em>by URL</em> and the feed host blocks your browser's
+                            direct download, the page retries through gtfs.guru, so the archive passes through our
+                            server in memory for that one request before your browser validates it.
+                            <a href="privacy.html" style="color: var(--accent-primary);">Both paths, in detail</a>.
                         </p>
                     </div>
                     <div>
                         <h3 style="margin-bottom: 0.5rem; color: var(--accent-primary);">How is GTFS Guru different
                             from the canonical Java validator?</h3>
                         <p style="color: var(--text-secondary); font-size: 1.05rem; line-height: 1.6;">
-                            GTFS Guru is built for speed. It can be up to 100x faster on small feeds where JVM startup
-                            dominates, while published large-feed benchmarks measure it at 4.6–6.7x faster than the
-                            canonical Java validator: 2.32s versus 10.60s on the MBTA feed and 9.75s versus 65.18s on
+                            It is a separate Rust implementation inspired by the canonical Java validator, not a port
+                            of it. The report shape and the notice codes are closely compatible, but the rule sets are
+                            not identical — <a href="compatibility/" style="color: var(--accent-primary);">the
+                            compatibility page</a> lists where they diverge. On speed, published benchmarks
+                            (Apple&nbsp;M3&nbsp;Pro, warm page cache, 8 threads) measure 4.6–6.7x faster than the
+                            canonical validator 8.0.1: 2.32s versus 10.60s on the MBTA feed and 9.75s versus 65.18s on
                             the OVapi Netherlands feed, using roughly 150&nbsp;MB of memory instead of 1.5&nbsp;GB. It
                             also runs where the Java validator cannot: in a web browser and as a native Python package.
                         </p>
@@ -772,7 +870,7 @@ gtfs-guru --stdout -i feed.zip | jq .</code></pre>
                 <p>Made by <a href="https://abasis.ai">Abasis.AI</a></p>
             </div>
             <div class="footer-links">
-                <a href="index.html#faq">FAQ</a>
+                <a href="/#faq">FAQ</a>
                 <a href="faq.html">Guides</a>
                 <a href="notices/">Notice codes</a>
                 <a href="contact.html">Contact</a>

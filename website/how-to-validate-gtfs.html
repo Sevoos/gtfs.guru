@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>How Do I Validate My GTFS Feed? | GTFS Guru</title>
+    <title>How to Validate a GTFS Feed: Find and Fix Errors | GTFS Guru</title>
     <meta name="description"
-        content="Validate your GTFS feed online using GTFS Guru – just drag and drop your ZIP file. Catches errors before you submit to Google Maps.">
+        content="Validate a GTFS feed in your browser: drop the ZIP, read the report, and fix each error by file, row and field before you publish.">
     <link rel="canonical" href="https://gtfs.guru/how-to-validate-gtfs.html">
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon.png?v=2">
@@ -16,7 +16,7 @@
     <meta property="og:site_name" content="GTFS Guru">
     <meta property="og:title" content="How Do I Validate My GTFS Feed? | GTFS Guru">
     <meta property="og:description"
-        content="Validate your GTFS feed online using GTFS Guru – just drag and drop your ZIP file. Catches errors before you submit to Google Maps.">
+        content="Validate a GTFS feed in your browser: drop the ZIP, read the report, and fix each error by file, row and field before you publish.">
     <meta property="og:image" content="https://gtfs.guru/og-image.png">
     <meta property="og:url" content="https://gtfs.guru/how-to-validate-gtfs.html">
 
@@ -24,7 +24,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="How Do I Validate My GTFS Feed? | GTFS Guru">
     <meta name="twitter:description"
-        content="Validate your GTFS feed online using GTFS Guru – just drag and drop your ZIP file. Catches errors before you submit to Google Maps.">
+        content="Validate a GTFS feed in your browser: drop the ZIP, read the report, and fix each error by file, row and field before you publish.">
     <meta name="twitter:image" content="https://gtfs.guru/og-image.png">
 
     <script type="application/ld+json">
@@ -49,7 +49,7 @@
   "@context": "https://schema.org",
   "@type": "Article",
   "headline": "How Do I Validate My GTFS Feed?",
-  "description": "Validate your GTFS feed online using GTFS Guru \u2013 just drag and drop your ZIP file. Catches errors before you submit to Google Maps.",
+  "description": "Validate a GTFS feed in your browser: drop the ZIP, read the report, and fix each error by file, row and field before you publish.",
   "author": {
     "@type": "Organization",
     "name": "GTFS Guru"
@@ -158,26 +158,38 @@
 <body>
     <nav class="glass-nav">
         <div class="container nav-container">
-            <a href="index.html" class="logo">
+            <a href="/" class="logo">
                 <img src="logo.png" alt="GTFS Guru" style="height: 32px; margin-right: 8px;">
                 <span class="logo-text">GTFS <span class="highlight">Guru</span></span>
             </a>
-            <div class="nav-links">
-                <a href="index.html#validator">Web Validator</a>
-                <a href="index.html#faq">FAQ</a>
+            <div class="nav-links" id="nav-links">
+                <a href="/#validator">Validator</a>
                 <a href="faq.html" class="active">Guides</a>
-                <a href="notices/">Notice codes</a>
-                <a href="compatibility/">Compatibility</a>
+                <details class="nav-dropdown">
+                    <summary>Documentation</summary>
+                    <div class="nav-dropdown-panel">
+                        <a href="notices/">Notice codes</a>
+                        <a href="compatibility/">Compatibility</a>
+                        <a href="/#faq">FAQ</a>
+                    </div>
+                </details>
+                <a href="/#developers">Developers</a>
                 <a href="contact.html">Contact</a>
-                <a href="index.html#developers">Developers</a>
                 <a href="https://github.com/abasis-ltd/gtfs.guru" target="_blank">GitHub</a>
+                <a href="/#validator" class="nav-mobile-cta">Validate a feed</a>
             </div>
-            <a href="index.html#download" class="btn btn-primary">Get the App</a>
+            <div class="nav-actions">
+                <a href="/#validator" class="btn btn-primary">Validate a feed</a>
+                <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Open menu"
+                    aria-expanded="false" aria-controls="nav-links">
+                    <i data-lucide="menu"></i>
+                </button>
+            </div>
         </div>
     </nav>
 
     <article class="faq-article">
-        <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span aria-hidden="true">/</span><a href="faq.html">Guides</a><span aria-hidden="true">/</span><span aria-current="page">How Do I Validate My GTFS Feed?</span></nav>
+        <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-hidden="true">/</span><a href="faq.html">Guides</a><span aria-hidden="true">/</span><span aria-current="page">How Do I Validate My GTFS Feed?</span></nav>
 
         <h1>How Do I Validate My GTFS Feed?</h1>
 
@@ -187,7 +199,7 @@
 
         <p>Validating is like proofreading before you publish. It's much easier to fix an error now than to deal with it
             after your riders see it:</p>
-        <p>• Google will reject feeds that have even minor validation errors.</p>
+        <p>• Validation errors are the usual reason a submission to Google Transit stalls or bounces.</p>
         <p>• Small typos can accidentally cancel hundreds of trips.</p>
         <p>• It ensures your maps look clean and professional.</p>
         <p>• It saves you hours of back-and-forth debugging with Google's support team.</p>
@@ -202,7 +214,10 @@
 
         <p><strong>Step 4:</strong> Review the results – fix any errors, address warnings</p>
 
-        <p>Your data never leaves your device. GTFS Guru runs entirely in your browser using WebAssembly technology.</p>
+        <p>A file you pick from your device never leaves it: GTFS Guru compiles to WebAssembly and validates the
+            archive inside your browser tab. Validating by URL works differently — if the feed host blocks your
+            browser's download, the archive is fetched through gtfs.guru on the way to your browser. The
+            <a href="privacy.html">privacy policy</a> describes both paths.</p>
 
         <h2>What Gets Checked?</h2>
 
@@ -220,14 +235,18 @@
 
         <p><strong>Logic:</strong> Do times progress forward? Are sequences continuous?</p>
 
-        <p><strong>Errors (Must Fix):</strong> These are "blockers." Your feed won't work properly if these exist, and
-            Google will definitely reject it.</p>
+        <p><strong>Errors (must fix):</strong> These break a requirement of the GTFS specification. Consumers may
+            reject the affected data or read it wrongly, so treat them as blockers.</p>
 
-        <p><strong>Warnings (Should Fix):</strong> These are usually best practices. Your feed might still work, but
-            fixing them makes the experience better for your riders.</p>
+        <p><strong>Warnings (should fix):</strong> Usually best practice rather than a rule. The feed may still work,
+            but warnings often point at real data problems your riders will notice.</p>
 
-        <p><strong>Score:</strong> We give you a quality score to help you track your progress. Aim for zero errors and
-            a high overall score!</p>
+        <p><strong>A note on Google:</strong> a clean GTFS Guru report is not a decision by Google. Google runs its own
+            checks on submission, with its own rule set and its own severity classification — something GTFS Guru calls
+            a warning may block a Google submission, and the reverse happens too. Validating first is how you remove
+            the problems both tools agree on; Google's
+            <a href="https://support.google.com/transitpartners/answer/1095599" target="_blank" rel="noopener">errors
+            and warnings reference</a> is the authority on what Google itself accepts.</p>
 
         <h2>Other Validation Options</h2>
 
@@ -241,7 +260,9 @@
 
         <p><strong>Canonical Validator:</strong> The
             <a href="https://github.com/MobilityData/gtfs-validator" target="_blank" rel="noopener">official Java
-            validator</a> from MobilityData. Same rules and notice codes; slower, and needs a Java runtime.</p>
+            validator</a> from MobilityData, and the reference GTFS Guru is measured against. Closely compatible
+            notice codes, but the two rule sets are not identical —
+            <a href="compatibility/">see where they differ</a>. Slower, and needs a Java runtime.</p>
 
         <p><strong>Google Transit Dashboard:</strong> Google validates when you submit, but it's better to catch errors
             beforehand.</p>
@@ -272,7 +293,7 @@
                 <p>by Abasis.AI</p>
             </div>
             <div class="footer-links">
-                <a href="index.html#faq">FAQ</a>
+                <a href="/#faq">FAQ</a>
                 <a href="faq.html">Guides</a>
                 <a href="notices/">Notice codes</a>
                 <a href="contact.html">Contact</a>
@@ -299,6 +320,7 @@
         }
     </script>
 
+    <script src="nav.js" defer></script>
 </body>
 
 </html>

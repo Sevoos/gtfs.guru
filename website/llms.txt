@@ -10,19 +10,26 @@ publish so that journey planners such as Google Maps, Apple Maps, Transit and
 Citymapper can show their schedules. A GTFS validator catches errors in that
 feed before it is published.
 
-GTFS Guru is a Rust rewrite of the canonical Java validator maintained by
-MobilityData. It reproduces the same rules and notice codes, so a report from
-either tool describes the same feed problems.
+GTFS Guru is a separate Rust implementation inspired by the canonical Java
+validator maintained by MobilityData. The report shape and the notice codes are
+closely compatible, so a report from either tool is read the same way — but the
+rule sets are not identical. <https://gtfs.guru/compatibility/> lists the exact
+GTFS reference revision and canonical validator release this version is aligned
+with, and where the two diverge.
 
 ## Answers to common questions
 
 - **How do I validate a GTFS feed?** Drop the `.zip` on <https://gtfs.guru/>
-  (it never leaves the browser), or run `gtfs-guru -i feed.zip -o ./report`.
+  (a file picked from the device never leaves the browser), or run
+  `gtfs-guru -i feed.zip -o ./report`.
 - **Is it free?** Yes. Apache 2.0, no usage limits, no paid tier.
-- **Is my feed uploaded anywhere?** No. Browser validation runs in WebAssembly
-  on the visitor's device; the desktop, CLI and Python paths are local too. The
-  only network call the site can make with a feed is the optional URL fetch
-  proxy, used when a feed host blocks cross-origin browser requests.
+- **Is my feed uploaded anywhere?** A file the visitor picks or drops is not:
+  it is read by the browser and validated in WebAssembly on their device, and
+  the desktop, CLI and Python paths are local too. Validating *by URL* is the
+  exception: if the feed host blocks the browser's cross-origin download, the
+  page retries through `gtfs.guru/cors-proxy`, so the archive passes through the
+  server in memory for that one request (not stored, not cached) before the
+  browser validates it. <https://gtfs.guru/privacy.html> covers both paths.
 - **How does it compare with the Java validator?** See the table below.
 - **How do I run it in CI?** Use the GitHub Action, or the CLI with
   `--fail-on error`. Both can emit SARIF for GitHub code scanning.
@@ -33,18 +40,20 @@ either tool describes the same feed problems.
 | --- | --- | --- |
 | MBTA feed benchmark | 10.60s | 2.32s (4.6x faster) |
 | OVapi Netherlands feed benchmark | 65.18s | 9.75s (6.7x faster) |
-| Small feeds | JVM startup dominates | up to 100x faster |
 | Peak memory | ~1.5 GB | ~150 MB |
-| Runtime requirement | Java runtime | standalone binary, no runtime |
+| Runtime requirement | Java runtime, JVM startup per run | standalone binary, no runtime |
 | Browser | not available | WebAssembly, runs in the tab |
 | Python | wrapper around the JAR | native package (`pip install gtfs-guru`) |
 | CI output | JSON, HTML | SARIF, JSON, HTML, plus a GitHub Action |
-| Validation rules | canonical rule set | 110 validators, 191 notice codes |
+| Validation rules | canonical rule set | 110 validators, 191 notice codes; closely compatible, not identical |
 | Licence | Apache 2.0 | Apache 2.0 |
 
 Benchmarks were run on an Apple M3 Pro with a warm page cache, each tool
-validating end to end and writing its normal reports. Numbers and method:
-<https://github.com/abasis-ltd/gtfs.guru#-performance>
+validating end to end with 8 threads and writing its normal reports
+(gtfs.guru n=5; canonical validator 8.0.1 on OpenJDK 21, n=3). Rule sets and
+report formats differ between the two tools, so these are whole-run times, not
+a per-rule comparison. Numbers and commands to reproduce:
+<https://abasis-ltd.github.io/gtfs.guru/benchmarks/>
 
 ## How to use it
 
@@ -52,7 +61,7 @@ Browser (nothing to install):
 
 1. Open <https://gtfs.guru/>
 2. Drop a `gtfs.zip` on the validator, paste a feed URL, or click
-   "Try an example feed"
+   "Validate an example feed"
 3. Read the report; download it as JSON or HTML, or copy a shareable link
 
 Command line:

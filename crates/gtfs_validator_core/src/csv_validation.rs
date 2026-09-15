@@ -492,6 +492,7 @@ impl RowValidator {
             );
         }
 
+        let mut mixed_case = Vec::new();
         // `record.len() == self.columns.len()` was checked above, so the zip
         // covers every field.
         for (plan, value) in self.columns.iter().zip(record.iter()) {
@@ -522,11 +523,10 @@ impl RowValidator {
             //
             // It only ever sees whitespace that sat *inside* quotes, because its
             // CSV parser strips whitespace around unquoted fields before
-            // validation runs. Telling the two apart needs the raw record bytes,
-            // which no reader hands us yet, so for now this stays behind
-            // --thorough: reporting every stray space would be right, but it is
-            // not what the reference emits.
-            if self.thorough && is_schema_field && trimmed.len() < value.len() {
+            // validation runs. Every reader applies the same pass
+            // (`csv_univocity`) before the csv crate, so whatever whitespace is
+            // left here was quoted in the source and the check matches Java.
+            if is_schema_field && trimmed.len() < value.len() {
                 notices.push(leading_or_trailing_whitespaces_notice(
                     &self.file_name,
                     header_name,
@@ -548,8 +548,11 @@ impl RowValidator {
                 ));
             }
 
+            // Java raises this from a generated SingleEntityValidator, which
+            // only runs on rows that parsed without an error, so it is held
+            // back until the row's field checks are done.
             if plan.is_mixed_case && is_mixed_case_violation(trimmed) {
-                notices.push(mixed_case_notice(
+                mixed_case.push(mixed_case_notice(
                     &self.file_name,
                     header_name,
                     row_number,
@@ -717,6 +720,12 @@ impl RowValidator {
                 }
             }
         }
+        if !notices
+            .iter()
+            .any(|notice| notice.severity == NoticeSeverity::Error)
+        {
+            notices.extend(mixed_case);
+        }
         notices
     }
 }
@@ -728,6 +737,8 @@ pub fn validate_csv_data(file_name: &str, data: &[u8], notices: &mut NoticeConta
         notices.push_empty_table(file_name);
         return;
     }
+    let data = crate::csv_univocity::normalize(data);
+    let data = data.as_ref();
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
         .flexible(true)
@@ -1021,6 +1032,36 @@ mod tests {
         assert!(is_mixed_case_violation("FOO BAR"));
         assert!(!is_mixed_case_violation("Foo Bar"));
         assert!(is_mixed_case_violation("'\u{05D0}\u{05D1}"));
+        // Thai combining vowel signs and tone marks are Mn, not \p{L}: Java
+        // splits on them, so one Thai word becomes several caseless tokens.
+        assert!(is_mixed_case_violation(
+            "\u{0E40}\u{0E04}\u{0E2B}\u{0E30}\u{0E23}\u{0E31}\u{0E07}\u{0E2A}\u{0E34}\u{0E15}"
+        ));
+        // ...while a word without marks stays one token and is never lowercase.
+        assert!(!is_mixed_case_violation("\u{0E01}\u{0E02}\u{0E04}"));
+        // No letters at all: Java's split returns an empty array.
+        assert!(!is_mixed_case_violation("123 - 456"));
+        assert!(!is_mixed_case_violation(""));
+        // A single astral letter is two UTF-16 units, so it counts as long.
+        assert!(is_mixed_case_violation("\u{1D41A}"));
+        assert!(!is_mixed_case_violation("a"));
+    }
+
+    /// Java raises mixed_case from a SingleEntityValidator, which never sees
+    /// a row whose fields failed to parse (Thailand, mdb-1831, agency.txt
+    /// rows with agency_url "-").
+    #[test]
+    fn mixed_case_is_not_reported_on_rows_with_field_errors() {
+        let mut notices = NoticeContainer::new();
+        let data = b"agency_name,agency_url,agency_timezone\nlower name,-,Asia/Bangkok\nlower name,https://example.com,Asia/Bangkok\n";
+        validate_csv_data("agency.txt", data, &mut notices);
+        let rows: Vec<u64> = notices
+            .iter()
+            .filter(|n| n.code == "mixed_case_recommended_field")
+            .map(|n| n.row.unwrap_or_default())
+            .collect();
+        assert_eq!(rows, vec![3]);
+        assert!(notices.iter().any(|n| n.code == "invalid_url"));
     }
 
     #[test]
@@ -1904,64 +1945,71 @@ pub fn is_value_validated_field(field: &str) -> bool {
         || is_color_field(field)
 }
 
+/// `MixedCaseValidatorGenerator` in gtfs-validator, step for step. Tokens are
+/// runs of `\p{L}`; `String.split` keeps a leading empty token and drops
+/// trailing ones; lengths are UTF-16 units; case tests are `\p{Ll}`/`\p{Lu}`.
+/// The generated `\d` tests can never match a letters-only token, so they are
+/// omitted.
 fn is_mixed_case_violation(value: &str) -> bool {
     let tokens = java_split_on_non_letters(value);
 
-    if tokens.is_empty() {
-        return false;
-    }
-
     if tokens.len() == 1 {
         let token = tokens[0];
-        let token_len = token.chars().count();
-        // Java logic: if length > 1, no numbers, and ALL LOWERCASE -> Violation.
-        if token_len <= 1 {
-            return false;
-        }
-        if token.chars().any(|ch| ch.is_numeric()) {
-            return false;
-        }
-        return token.chars().all(|ch| ch.is_lowercase());
+        return utf16_len(token) > 1 && token.chars().all(is_java_lowercase);
     }
 
     let mut has_mixed_case_token = false;
     let mut no_number_tokens = 0;
-
     for token in tokens {
-        let token_len = token.chars().count();
-        if token_len == 1 || token.chars().any(|ch| ch.is_numeric()) {
+        if utf16_len(token) == 1 {
             continue;
         }
-
         no_number_tokens += 1;
-
-        let has_upper = token.chars().any(|ch| ch.is_uppercase());
-        let has_lower = token.chars().any(|ch| ch.is_lowercase());
-
-        if has_upper && has_lower {
+        if token.chars().any(is_java_uppercase) && token.chars().any(is_java_lowercase) {
             has_mixed_case_token = true;
         }
     }
-
-    // Java logic: if >= 2 tokens without numbers, and NO token is mixed case -> Violation.
     no_number_tokens >= 2 && !has_mixed_case_token
 }
 
+fn utf16_len(token: &str) -> usize {
+    token.chars().map(char::len_utf16).sum()
+}
+
+/// Java `\p{L}`: general category Lu, Ll, Lt, Lm or Lo. Not `char::is_alphabetic`,
+/// whose Alphabetic property also covers combining vowel signs (Thai, Lao,
+/// Devanagari...), letter numbers and circled letters, which Java splits on.
+fn is_java_letter(ch: char) -> bool {
+    use unicode_general_category::{get_general_category, GeneralCategory};
+    matches!(
+        get_general_category(ch),
+        GeneralCategory::UppercaseLetter
+            | GeneralCategory::LowercaseLetter
+            | GeneralCategory::TitlecaseLetter
+            | GeneralCategory::ModifierLetter
+            | GeneralCategory::OtherLetter
+    )
+}
+
+fn is_java_lowercase(ch: char) -> bool {
+    unicode_general_category::get_general_category(ch)
+        == unicode_general_category::GeneralCategory::LowercaseLetter
+}
+
+fn is_java_uppercase(ch: char) -> bool {
+    unicode_general_category::get_general_category(ch)
+        == unicode_general_category::GeneralCategory::UppercaseLetter
+}
+
+/// `value.split("[^\\p{L}]+")` with Java semantics: no match returns the
+/// whole string (so `""` gives `[""]`), a leading separator yields a leading
+/// empty token, and trailing empty tokens are removed, so a value with no
+/// letters at all splits into nothing.
 fn java_split_on_non_letters(value: &str) -> Vec<&str> {
-    if value.is_empty() {
-        return vec![""];
-    }
-
-    let starts_with_non_letter = value
-        .chars()
-        .next()
-        .map(|ch| !ch.is_alphabetic())
-        .unwrap_or(false);
-
     let mut tokens = Vec::new();
     let mut run_start = None;
     for (idx, ch) in value.char_indices() {
-        if ch.is_alphabetic() {
+        if is_java_letter(ch) {
             if run_start.is_none() {
                 run_start = Some(idx);
             }
@@ -1974,13 +2022,15 @@ fn java_split_on_non_letters(value: &str) -> Vec<&str> {
     }
 
     if tokens.is_empty() {
-        return Vec::new();
+        return if value.is_empty() {
+            vec![""]
+        } else {
+            Vec::new()
+        };
     }
-
-    if starts_with_non_letter {
+    if value.chars().next().is_some_and(|ch| !is_java_letter(ch)) {
         tokens.insert(0, "");
     }
-
     tokens
 }
 
@@ -2798,6 +2848,54 @@ mod tests_timezones {
 mod tests_whitespaces {
     use super::*;
 
+    fn codes(file_name: &str, data: &[u8], code: &str) -> Vec<(String, String)> {
+        let mut notices = NoticeContainer::new();
+        validate_csv_data(file_name, data, &mut notices);
+        notices
+            .iter()
+            .filter(|n| n.code == code)
+            .map(|n| {
+                (
+                    n.context["fieldName"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string(),
+                    n.context["fieldValue"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string(),
+                )
+            })
+            .collect()
+    }
+
+    /// GTF-35: whitespace inside quotes is what Java reports, in default mode.
+    #[test]
+    fn quoted_whitespace_is_reported_without_thorough() {
+        let data = b"stop_id,stop_name\nS1,\" Central Station \"\n";
+        assert_eq!(
+            codes("stops.txt", data, "leading_or_trailing_whitespaces"),
+            vec![("stop_name".to_string(), " Central Station ".to_string())]
+        );
+    }
+
+    /// Whitespace around a bare field is stripped by univocity before Java
+    /// validates, so it must not be reported.
+    #[test]
+    fn bare_whitespace_is_not_reported() {
+        let data = b"stop_id,stop_name\n S1 , Central Station \n";
+        assert!(codes("stops.txt", data, "leading_or_trailing_whitespaces").is_empty());
+    }
+
+    /// Latvia (mdb-992): a quote after a space still opens the quote, so the
+    /// value is `DUS`, not `"DUS"`, and mixed_case does not fire on it.
+    #[test]
+    fn quote_after_space_opens_the_field() {
+        let data = b"stop_id,stop_name\n817, \"DUS\"\n";
+        assert!(codes("stops.txt", data, "mixed_case_recommended_field").is_empty());
+        assert!(codes("stops.txt", data, "leading_or_trailing_whitespaces").is_empty());
+    }
+
     #[test]
     fn test_whitespace_checks_schema_aware() {
         let mut notices = NoticeContainer::new();
@@ -2856,12 +2954,19 @@ mod tests_non_ascii {
         assert!(non_ascii_fields("translations.txt", data).is_empty());
 
         let data = "timeframe_group_id,service_id\n\u{e9}t\u{e9},\u{e9}t\u{e9}".as_bytes();
-        assert_eq!(non_ascii_fields("timeframes.txt", data), vec!["timeframe_group_id"]);
+        assert_eq!(
+            non_ascii_fields("timeframes.txt", data),
+            vec!["timeframe_group_id"]
+        );
 
         let data = "location_group_id,stop_id\n\u{e9},\u{e8}".as_bytes();
         assert!(non_ascii_fields("location_group_stops.txt", data).is_empty());
 
-        let data = "booking_rule_id,booking_type,prior_notice_service_id\nr\u{e8}gle,2,\u{e9}".as_bytes();
-        assert_eq!(non_ascii_fields("booking_rules.txt", data), vec!["booking_rule_id"]);
+        let data =
+            "booking_rule_id,booking_type,prior_notice_service_id\nr\u{e8}gle,2,\u{e9}".as_bytes();
+        assert_eq!(
+            non_ascii_fields("booking_rules.txt", data),
+            vec!["booking_rule_id"]
+        );
     }
 }

@@ -4,16 +4,6 @@
   "entries": [
     {
       "feed_id": "mdb-3234",
-      "code": "leading_or_trailing_whitespaces",
-      "severity": "WARNING",
-      "java_total": 1,
-      "guru_total": "absent",
-      "triaged": true,
-      "added": "2026-08-14",
-      "reason": "Triaged 2026-09-15 (GTF-35). The canonical validator reports booking_rules.txt row 9, booking_url, whose value is double-quoted with a space inside the quotes. gtfs.guru emits this notice only under --thorough: its parser cannot yet tell whitespace inside quotes (which univocity keeps and Java reports) from whitespace around bare fields (which univocity strips before validation), so reporting it by default would over-report on every feed with padded bare fields. Default-mode count is therefore zero by construction on every feed until quote-aware detection lands. Kept as a known gap."
-    },
-    {
-      "feed_id": "mdb-3234",
       "code": "missing_pickup_drop_off_booking_rule_id",
       "severity": "WARNING",
       "java_total": "absent",

@@ -1,4 +1,12 @@
-use std::collections::{HashMap, HashSet};
+//! Mirrors `BlockTripsWithOverlappingStopTimesValidator` from gtfs-validator
+//! 8.0.1 step for step: the trip interval comes from the first and last
+//! stop_time by stop_sequence (both need arrival and departure), intervals are
+//! sorted by (first arrival, last departure), a pair whose last stop of trip A
+//! equals the first stop of trip B is a block transfer and not an overlap, and
+//! two trips only overlap when their services share an active date. The
+//! `intersection` field is that first shared date, not a time range.
+
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use chrono::{Datelike, NaiveDate, Weekday};
 
@@ -17,45 +25,58 @@ impl Validator for BlockTripsWithOverlappingStopTimesValidator {
     }
 
     fn validate(&self, feed: &GtfsFeed, notices: &mut NoticeContainer) {
+        if feed.trips.rows.is_empty() || feed.stop_times.rows.is_empty() {
+            return;
+        }
         let service_dates = build_service_dates(feed);
-        let mut blocks: HashMap<StringId, Vec<TripWindow>> = HashMap::new();
+        let mut intersections = ServiceIntersectionCache::new(&service_dates);
+        let mut blocks: HashMap<StringId, Vec<TripInterval>> = HashMap::new();
 
         for (index, trip) in feed.trips.rows.iter().enumerate() {
             let row_number = feed.trips.row_number(index);
             let Some(block_id) = trip.block_id.filter(|id| id.0 != 0) else {
                 continue;
             };
-
             let trip_id = trip.trip_id;
-            if trip_id.0 == 0 {
-                continue;
-            }
-            let stop_time_indices = match feed.stop_times_by_trip.get(&trip_id) {
-                Some(indices) => indices,
-                None => continue,
-            };
-            // feed.stop_times_by_trip is already sorted by stop_sequence, so no
-            // re-sort is needed here.
-            let stop_times: Vec<&gtfs_guru_model::StopTime> = stop_time_indices
-                .iter()
-                .map(|&index| &feed.stop_times.rows[index])
-                .collect();
-            let stop_times = stop_times.as_slice();
             let service_id = trip.service_id;
-            if service_id.0 == 0 {
+            if trip_id.0 == 0 || service_id.0 == 0 {
                 continue;
             }
-
-            let Some((start, end)) = trip_time_window(stop_times) else {
+            // Trips without stop times are reported elsewhere. The index is
+            // already ordered by stop_sequence, like Java's byTripId().
+            let Some(stop_time_indices) = feed.stop_times_by_trip.get(&trip_id) else {
+                continue;
+            };
+            let (Some(&first_index), Some(&last_index)) =
+                (stop_time_indices.first(), stop_time_indices.last())
+            else {
+                continue;
+            };
+            let first = &feed.stop_times.rows[first_index];
+            let last = &feed.stop_times.rows[last_index];
+            let (
+                Some(first_arrival),
+                Some(first_departure),
+                Some(last_arrival),
+                Some(last_departure),
+            ) = (
+                first.arrival_time,
+                first.departure_time,
+                last.arrival_time,
+                last.departure_time,
+            )
+            else {
                 continue;
             };
 
-            blocks.entry(block_id).or_default().push(TripWindow {
+            blocks.entry(block_id).or_default().push(TripInterval {
                 block_id,
                 trip_id,
                 service_id,
-                start,
-                end,
+                first_arrival,
+                first_departure,
+                last_arrival,
+                last_departure,
                 row_number,
             });
         }
@@ -66,164 +87,195 @@ impl Validator for BlockTripsWithOverlappingStopTimesValidator {
                 .resolve(*left_id)
                 .cmp(&feed.pool.resolve(*right_id))
         });
-        for (_, windows) in &mut groups {
-            windows.sort_by_key(|window| window.start.total_seconds());
+        for (_, intervals) in &mut groups {
+            // Stable, like Collections.sort: ties keep trips.txt order.
+            intervals.sort_by_key(|interval| {
+                (
+                    interval.first_arrival.total_seconds(),
+                    interval.last_departure.total_seconds(),
+                )
+            });
         }
 
-        for (_, windows) in &groups {
-            for i in 0..windows.len() {
-                let current = &windows[i];
-                for next in windows.iter().skip(i + 1) {
-                    if next.start.total_seconds() >= current.end.total_seconds() {
+        for (_, intervals) in &groups {
+            for i in 0..intervals.len() {
+                let current = &intervals[i];
+                for next in intervals.iter().skip(i + 1) {
+                    // Sorted by first arrival, so nothing further down can
+                    // overlap once this one starts after the current ends.
+                    if current.last_departure.total_seconds() <= next.first_arrival.total_seconds()
+                    {
                         break;
                     }
-                    if !services_overlap(current.service_id, next.service_id, &service_dates) {
+                    // Many agencies model a block transfer by repeating the
+                    // stop_times row for both trips. Java allows that pair.
+                    if current.last_arrival == next.first_arrival
+                        && current.last_departure == next.first_departure
+                    {
                         continue;
                     }
-                    let mut notice = ValidationNotice::new(
-                        CODE_BLOCK_TRIPS_WITH_OVERLAPPING_STOP_TIMES,
-                        NoticeSeverity::Error,
-                        "trips in the same block have overlapping stop times",
-                    );
-                    let block_id = feed.pool.resolve(current.block_id);
-                    let service_id_a = feed.pool.resolve(current.service_id);
-                    let service_id_b = feed.pool.resolve(next.service_id);
-                    let trip_id_a = feed.pool.resolve(current.trip_id);
-                    let trip_id_b = feed.pool.resolve(next.trip_id);
-                    notice.insert_context_field("blockId", block_id.as_str());
-                    notice.insert_context_field("csvRowNumberA", current.row_number);
-                    notice.insert_context_field("csvRowNumberB", next.row_number);
-                    notice.insert_context_field("intersection", overlap_label(current, next));
-                    notice.insert_context_field("serviceIdA", service_id_a.as_str());
-                    notice.insert_context_field("serviceIdB", service_id_b.as_str());
-                    notice.insert_context_field("tripIdA", trip_id_a.as_str());
-                    notice.insert_context_field("tripIdB", trip_id_b.as_str());
-                    notice.field_order = vec![
-                        "blockId".into(),
-                        "csvRowNumberA".into(),
-                        "csvRowNumberB".into(),
-                        "intersection".into(),
-                        "serviceIdA".into(),
-                        "serviceIdB".into(),
-                        "tripIdA".into(),
-                        "tripIdB".into(),
-                    ];
-                    notices.push(notice);
+                    let Some(intersection) =
+                        intersections.first_shared_date(current.service_id, next.service_id)
+                    else {
+                        continue;
+                    };
+                    notices.push(overlap_notice(feed, current, next, intersection));
                 }
             }
         }
     }
 }
 
+fn overlap_notice(
+    feed: &GtfsFeed,
+    current: &TripInterval,
+    next: &TripInterval,
+    intersection: NaiveDate,
+) -> ValidationNotice {
+    let mut notice = ValidationNotice::new(
+        CODE_BLOCK_TRIPS_WITH_OVERLAPPING_STOP_TIMES,
+        NoticeSeverity::Error,
+        "trips in the same block have overlapping stop times",
+    );
+    let block_id = feed.pool.resolve(current.block_id);
+    let service_id_a = feed.pool.resolve(current.service_id);
+    let service_id_b = feed.pool.resolve(next.service_id);
+    let trip_id_a = feed.pool.resolve(current.trip_id);
+    let trip_id_b = feed.pool.resolve(next.trip_id);
+    notice.insert_context_field("blockId", block_id.as_str());
+    notice.insert_context_field("csvRowNumberA", current.row_number);
+    notice.insert_context_field("csvRowNumberB", next.row_number);
+    // Java serialises GtfsDate as YYYYMMDD in notice context.
+    notice.insert_context_field("intersection", intersection.format("%Y%m%d").to_string());
+    notice.insert_context_field("serviceIdA", service_id_a.as_str());
+    notice.insert_context_field("serviceIdB", service_id_b.as_str());
+    notice.insert_context_field("tripIdA", trip_id_a.as_str());
+    notice.insert_context_field("tripIdB", trip_id_b.as_str());
+    notice.field_order = vec![
+        "blockId".into(),
+        "csvRowNumberA".into(),
+        "csvRowNumberB".into(),
+        "intersection".into(),
+        "serviceIdA".into(),
+        "serviceIdB".into(),
+        "tripIdA".into(),
+        "tripIdB".into(),
+    ];
+    notice
+}
+
 #[derive(Debug, Clone, Copy)]
-struct TripWindow {
+struct TripInterval {
     block_id: StringId,
     trip_id: StringId,
     service_id: StringId,
-    start: GtfsTime,
-    end: GtfsTime,
+    first_arrival: GtfsTime,
+    first_departure: GtfsTime,
+    last_arrival: GtfsTime,
+    last_departure: GtfsTime,
     row_number: u64,
 }
 
-fn trip_time_window(stop_times: &[&gtfs_guru_model::StopTime]) -> Option<(GtfsTime, GtfsTime)> {
-    let mut start = None;
-    let mut end = None;
+/// `ServiceIdIntersectionCache`: memoised first shared active date per
+/// unordered service pair. A service with no active dates never intersects,
+/// not even with itself.
+struct ServiceIntersectionCache<'a> {
+    service_dates: &'a HashMap<StringId, BTreeSet<NaiveDate>>,
+    cache: HashMap<(StringId, StringId), Option<NaiveDate>>,
+}
 
-    for stop_time in stop_times {
-        if start.is_none() {
-            start = stop_time_start_time(stop_time);
-        }
-        if let Some(value) = stop_time_end_time(stop_time) {
-            end = Some(value);
+impl<'a> ServiceIntersectionCache<'a> {
+    fn new(service_dates: &'a HashMap<StringId, BTreeSet<NaiveDate>>) -> Self {
+        Self {
+            service_dates,
+            cache: HashMap::new(),
         }
     }
 
-    match (start, end) {
-        (Some(start), Some(end)) => Some((start, end)),
-        _ => None,
+    fn first_shared_date(&mut self, left: StringId, right: StringId) -> Option<NaiveDate> {
+        let key = if left.0 <= right.0 {
+            (left, right)
+        } else {
+            (right, left)
+        };
+        if let Some(cached) = self.cache.get(&key) {
+            return *cached;
+        }
+        let found = match (
+            self.service_dates.get(&key.0),
+            self.service_dates.get(&key.1),
+        ) {
+            (Some(left), Some(right)) => first_intersecting_date(left, right),
+            _ => None,
+        };
+        self.cache.insert(key, found);
+        found
     }
 }
 
-fn stop_time_start_time(stop_time: &gtfs_guru_model::StopTime) -> Option<GtfsTime> {
-    match (stop_time.arrival_time, stop_time.departure_time) {
-        (Some(arrival), Some(departure)) => {
-            if arrival.total_seconds() <= departure.total_seconds() {
-                Some(arrival)
-            } else {
-                Some(departure)
+/// `CalendarUtil.firstIntersectingDate`: merge-walk two sorted date sets.
+fn first_intersecting_date(
+    left: &BTreeSet<NaiveDate>,
+    right: &BTreeSet<NaiveDate>,
+) -> Option<NaiveDate> {
+    let mut left_iter = left.iter().peekable();
+    let mut right_iter = right.iter().peekable();
+    loop {
+        let (Some(a), Some(b)) = (left_iter.peek(), right_iter.peek()) else {
+            return None;
+        };
+        match a.cmp(b) {
+            std::cmp::Ordering::Equal => return Some(**a),
+            std::cmp::Ordering::Less => {
+                left_iter.next();
+            }
+            std::cmp::Ordering::Greater => {
+                right_iter.next();
             }
         }
-        (Some(arrival), None) => Some(arrival),
-        (None, Some(departure)) => Some(departure),
-        _ => None,
     }
 }
 
-fn stop_time_end_time(stop_time: &gtfs_guru_model::StopTime) -> Option<GtfsTime> {
-    match (stop_time.arrival_time, stop_time.departure_time) {
-        (Some(arrival), Some(departure)) => {
-            if arrival.total_seconds() >= departure.total_seconds() {
-                Some(arrival)
-            } else {
-                Some(departure)
+/// `CalendarUtil.buildServicePeriodMap` + `ServicePeriod.toDates()`: the
+/// weekly pattern between start and end (end clamped to start when the
+/// calendar row is inverted), plus every added date, minus every removed
+/// date. Removals win over additions regardless of row order.
+fn build_service_dates(feed: &GtfsFeed) -> HashMap<StringId, BTreeSet<NaiveDate>> {
+    let mut added: HashMap<StringId, HashSet<NaiveDate>> = HashMap::new();
+    let mut removed: HashMap<StringId, HashSet<NaiveDate>> = HashMap::new();
+    if let Some(calendar_dates) = &feed.calendar_dates {
+        for row in &calendar_dates.rows {
+            let Some(date) = gtfs_date_to_naive(row.date) else {
+                continue;
+            };
+            match row.exception_type {
+                ExceptionType::Added => {
+                    added.entry(row.service_id).or_default().insert(date);
+                }
+                _ => {
+                    removed.entry(row.service_id).or_default().insert(date);
+                }
             }
         }
-        (Some(arrival), None) => Some(arrival),
-        (None, Some(departure)) => Some(departure),
-        _ => None,
-    }
-}
-
-fn overlap_label(current: &TripWindow, next: &TripWindow) -> String {
-    let start = if current.start.total_seconds() >= next.start.total_seconds() {
-        current.start
-    } else {
-        next.start
-    };
-    let end = if current.end.total_seconds() <= next.end.total_seconds() {
-        current.end
-    } else {
-        next.end
-    };
-    format!("{}-{}", start, end)
-}
-
-fn services_overlap(
-    left_service_id: StringId,
-    right_service_id: StringId,
-    service_dates: &HashMap<StringId, HashSet<NaiveDate>>,
-) -> bool {
-    if left_service_id == right_service_id {
-        return true;
     }
 
-    let left_dates = service_dates.get(&left_service_id);
-    let right_dates = service_dates.get(&right_service_id);
-
-    match (left_dates, right_dates) {
-        (Some(left), Some(right)) => left.iter().any(|date| right.contains(date)),
-        _ => false,
-    }
-}
-
-fn build_service_dates(feed: &GtfsFeed) -> HashMap<StringId, HashSet<NaiveDate>> {
-    let mut dates_by_service: HashMap<StringId, HashSet<NaiveDate>> = HashMap::new();
-
+    let mut dates_by_service: HashMap<StringId, BTreeSet<NaiveDate>> = HashMap::new();
     if let Some(calendar) = &feed.calendar {
         for row in &calendar.rows {
-            let Some(mut current) = gtfs_date_to_naive(row.start_date) else {
+            let (Some(start), Some(mut end)) = (
+                gtfs_date_to_naive(row.start_date),
+                gtfs_date_to_naive(row.end_date),
+            ) else {
                 continue;
             };
-            let Some(end_date) = gtfs_date_to_naive(row.end_date) else {
-                continue;
-            };
-
-            while current <= end_date {
+            if start > end {
+                end = start;
+            }
+            let dates = dates_by_service.entry(row.service_id).or_default();
+            let mut current = start;
+            while current <= end {
                 if service_available_on_date(row, current) {
-                    dates_by_service
-                        .entry(row.service_id)
-                        .or_default()
-                        .insert(current);
+                    dates.insert(current);
                 }
                 match current.succ_opt() {
                     Some(next) => current = next,
@@ -232,25 +284,19 @@ fn build_service_dates(feed: &GtfsFeed) -> HashMap<StringId, HashSet<NaiveDate>>
             }
         }
     }
-
-    if let Some(calendar_dates) = &feed.calendar_dates {
-        for row in &calendar_dates.rows {
-            let Some(date) = gtfs_date_to_naive(row.date) else {
-                continue;
-            };
-            let entry = dates_by_service.entry(row.service_id).or_default();
-            match row.exception_type {
-                ExceptionType::Added => {
-                    entry.insert(date);
-                }
-                ExceptionType::Removed => {
-                    entry.remove(&date);
-                }
-                _ => {}
+    for (service_id, dates) in added {
+        dates_by_service
+            .entry(service_id)
+            .or_default()
+            .extend(dates);
+    }
+    for (service_id, dates) in removed {
+        if let Some(active) = dates_by_service.get_mut(&service_id) {
+            for date in dates {
+                active.remove(&date);
             }
         }
     }
-
     dates_by_service
 }
 
@@ -280,6 +326,21 @@ mod tests {
     use crate::CsvTable;
     use gtfs_guru_model::{GtfsDate, RouteType, StopTime};
 
+    fn run(feed: &mut GtfsFeed) -> Vec<ValidationNotice> {
+        let mut notices = NoticeContainer::new();
+        feed.rebuild_stop_times_index();
+        BlockTripsWithOverlappingStopTimesValidator.validate(feed, &mut notices);
+        notices.iter().cloned().collect()
+    }
+
+    fn calendar(rows: Vec<Calendar>) -> Option<CsvTable<Calendar>> {
+        Some(CsvTable {
+            headers: Vec::new(),
+            rows,
+            row_numbers: Vec::new(),
+        })
+    }
+
     #[test]
     fn emits_notice_for_overlapping_trips_in_same_block() {
         let mut feed = base_feed();
@@ -291,19 +352,12 @@ mod tests {
         feed.stop_times
             .rows
             .extend(stop_times_for_trip("T2", "08:30:00", "09:30:00", &feed));
-        feed.calendar = Some(CsvTable {
-            headers: Vec::new(),
-            rows: vec![calendar_row("SVC1", "20240101", Weekday::Mon, &feed)],
-            row_numbers: Vec::new(),
-        });
+        feed.calendar = calendar(vec![calendar_row("SVC1", "20240101", Weekday::Mon, &feed)]);
 
-        let mut notices = NoticeContainer::new();
-        feed.rebuild_stop_times_index();
-        BlockTripsWithOverlappingStopTimesValidator.validate(&feed, &mut notices);
-
+        let notices = run(&mut feed);
         assert_eq!(notices.len(), 1);
         assert_eq!(
-            notices.iter().next().unwrap().code,
+            notices[0].code,
             CODE_BLOCK_TRIPS_WITH_OVERLAPPING_STOP_TIMES
         );
     }
@@ -319,17 +373,9 @@ mod tests {
         feed.stop_times
             .rows
             .extend(stop_times_for_trip("T2", "09:00:00", "10:00:00", &feed));
-        feed.calendar = Some(CsvTable {
-            headers: Vec::new(),
-            rows: vec![calendar_row("SVC1", "20240101", Weekday::Mon, &feed)],
-            row_numbers: Vec::new(),
-        });
+        feed.calendar = calendar(vec![calendar_row("SVC1", "20240101", Weekday::Mon, &feed)]);
 
-        let mut notices = NoticeContainer::new();
-        feed.rebuild_stop_times_index();
-        BlockTripsWithOverlappingStopTimesValidator.validate(&feed, &mut notices);
-
-        assert!(notices.is_empty());
+        assert!(run(&mut feed).is_empty());
     }
 
     #[test]
@@ -343,20 +389,12 @@ mod tests {
         feed.stop_times
             .rows
             .extend(stop_times_for_trip("T2", "08:30:00", "09:30:00", &feed));
-        feed.calendar = Some(CsvTable {
-            headers: Vec::new(),
-            rows: vec![
-                calendar_row("SVC1", "20240101", Weekday::Mon, &feed),
-                calendar_row("SVC2", "20240102", Weekday::Tue, &feed),
-            ],
-            row_numbers: Vec::new(),
-        });
+        feed.calendar = calendar(vec![
+            calendar_row("SVC1", "20240101", Weekday::Mon, &feed),
+            calendar_row("SVC2", "20240102", Weekday::Tue, &feed),
+        ]);
 
-        let mut notices = NoticeContainer::new();
-        feed.rebuild_stop_times_index();
-        BlockTripsWithOverlappingStopTimesValidator.validate(&feed, &mut notices);
-
-        assert!(notices.is_empty());
+        assert!(run(&mut feed).is_empty());
     }
 
     #[test]
@@ -370,23 +408,174 @@ mod tests {
         feed.stop_times
             .rows
             .extend(stop_times_for_trip("T2", "08:30:00", "09:30:00", &feed));
-        feed.calendar = Some(CsvTable {
-            headers: Vec::new(),
-            rows: vec![
-                calendar_row("SVC1", "20240101", Weekday::Mon, &feed),
-                calendar_row("SVC2", "20240101", Weekday::Mon, &feed),
-            ],
-            row_numbers: Vec::new(),
-        });
+        feed.calendar = calendar(vec![
+            calendar_row("SVC1", "20240101", Weekday::Mon, &feed),
+            calendar_row("SVC2", "20240101", Weekday::Mon, &feed),
+        ]);
 
-        let mut notices = NoticeContainer::new();
-        feed.rebuild_stop_times_index();
-        BlockTripsWithOverlappingStopTimesValidator.validate(&feed, &mut notices);
-
+        let notices = run(&mut feed);
         assert_eq!(notices.len(), 1);
         assert_eq!(
-            notices.iter().next().unwrap().code,
+            notices[0].code,
             CODE_BLOCK_TRIPS_WITH_OVERLAPPING_STOP_TIMES
+        );
+    }
+
+    /// Hyderabad (mdb-2457): trip A's last stop and trip B's first stop carry
+    /// the same arrival/departure pair. That is a block transfer, not an
+    /// overlap, and Java skips the pair explicitly.
+    #[test]
+    fn block_transfer_with_identical_boundary_stop_time_is_not_an_overlap() {
+        let mut feed = base_feed();
+        feed.trips.rows = vec![
+            trip("T1", "SVC1", "BLOCK1", &feed),
+            trip("T2", "SVC1", "BLOCK1", &feed),
+        ];
+        feed.stop_times.rows = vec![
+            stop_time("T1", "STOP1", 1, "06:00:00", "06:00:00", &feed),
+            stop_time("T1", "STOP2", 2, "06:27:05", "06:28:44", &feed),
+            stop_time("T2", "STOP2", 1, "06:27:05", "06:28:44", &feed),
+            stop_time("T2", "STOP1", 2, "07:00:00", "07:00:00", &feed),
+        ];
+        feed.calendar = calendar(vec![calendar_row("SVC1", "20240101", Weekday::Mon, &feed)]);
+
+        assert!(run(&mut feed).is_empty());
+    }
+
+    /// Same boundary times but with an actual overlap on trip B's first stop:
+    /// only the departure matches, so the transfer exception does not apply.
+    #[test]
+    fn boundary_stop_time_with_different_arrival_still_overlaps() {
+        let mut feed = base_feed();
+        feed.trips.rows = vec![
+            trip("T1", "SVC1", "BLOCK1", &feed),
+            trip("T2", "SVC1", "BLOCK1", &feed),
+        ];
+        feed.stop_times.rows = vec![
+            stop_time("T1", "STOP1", 1, "06:00:00", "06:00:00", &feed),
+            stop_time("T1", "STOP2", 2, "06:27:05", "06:28:44", &feed),
+            stop_time("T2", "STOP2", 1, "06:27:00", "06:28:44", &feed),
+            stop_time("T2", "STOP1", 2, "07:00:00", "07:00:00", &feed),
+        ];
+        feed.calendar = calendar(vec![calendar_row("SVC1", "20240101", Weekday::Mon, &feed)]);
+
+        assert_eq!(run(&mut feed).len(), 1);
+    }
+
+    /// SNCB (mdb-686): every weekday is 0 and there are no calendar_dates, so
+    /// the service has no active date. Java requires a shared active date even
+    /// for identical service_ids; a service that never runs cannot overlap.
+    #[test]
+    fn same_service_id_without_active_dates_does_not_overlap() {
+        let mut feed = base_feed();
+        feed.trips.rows = vec![
+            trip("T1", "SVC1", "BLOCK1", &feed),
+            trip("T2", "SVC1", "BLOCK1", &feed),
+        ];
+        feed.stop_times.rows = stop_times_for_trip("T1", "08:00:00", "09:00:00", &feed);
+        feed.stop_times
+            .rows
+            .extend(stop_times_for_trip("T2", "08:30:00", "09:30:00", &feed));
+        let mut never = calendar_row("SVC1", "20240101", Weekday::Mon, &feed);
+        never.monday = ServiceAvailability::Unavailable;
+        feed.calendar = calendar(vec![never]);
+
+        assert!(run(&mut feed).is_empty());
+    }
+
+    /// Same service_id but the service is not defined in calendar.txt or
+    /// calendar_dates.txt at all: no dates, no overlap.
+    #[test]
+    fn same_service_id_unknown_to_calendars_does_not_overlap() {
+        let mut feed = base_feed();
+        feed.trips.rows = vec![
+            trip("T1", "SVC1", "BLOCK1", &feed),
+            trip("T2", "SVC1", "BLOCK1", &feed),
+        ];
+        feed.stop_times.rows = stop_times_for_trip("T1", "08:00:00", "09:00:00", &feed);
+        feed.stop_times
+            .rows
+            .extend(stop_times_for_trip("T2", "08:30:00", "09:30:00", &feed));
+        feed.calendar = calendar(vec![]);
+
+        assert!(run(&mut feed).is_empty());
+    }
+
+    /// `intersection` is the first shared active date as YYYYMMDD, the way
+    /// Java's Gson serialiser writes GtfsDate.
+    #[test]
+    fn intersection_is_first_shared_service_date() {
+        let mut feed = base_feed();
+        feed.trips.rows = vec![
+            trip("T1", "SVC1", "BLOCK1", &feed),
+            trip("T2", "SVC2", "BLOCK1", &feed),
+        ];
+        feed.stop_times.rows = stop_times_for_trip("T1", "08:00:00", "09:00:00", &feed);
+        feed.stop_times
+            .rows
+            .extend(stop_times_for_trip("T2", "08:30:00", "09:30:00", &feed));
+        // SVC1 runs Mondays through January 2024; SVC2 runs Mondays from the
+        // 15th. First shared Monday is 2024-01-15.
+        let mut svc1 = calendar_row("SVC1", "20240101", Weekday::Mon, &feed);
+        svc1.end_date = GtfsDate::parse("20240131").unwrap();
+        let mut svc2 = calendar_row("SVC2", "20240115", Weekday::Mon, &feed);
+        svc2.end_date = GtfsDate::parse("20240131").unwrap();
+        feed.calendar = calendar(vec![svc1, svc2]);
+
+        let notices = run(&mut feed);
+        assert_eq!(notices.len(), 1);
+        assert_eq!(
+            notices[0]
+                .context
+                .get("intersection")
+                .and_then(|v| v.as_str()),
+            Some("20240115")
+        );
+    }
+
+    /// Trips whose first or last stop_time lacks arrival or departure are not
+    /// given an interval at all, like Java's constructOrderedTripIntervals.
+    #[test]
+    fn trip_without_boundary_times_is_skipped() {
+        let mut feed = base_feed();
+        feed.trips.rows = vec![
+            trip("T1", "SVC1", "BLOCK1", &feed),
+            trip("T2", "SVC1", "BLOCK1", &feed),
+        ];
+        feed.stop_times.rows = stop_times_for_trip("T1", "08:00:00", "09:00:00", &feed);
+        let mut second = stop_times_for_trip("T2", "08:30:00", "09:30:00", &feed);
+        second[0].departure_time = None;
+        feed.stop_times.rows.extend(second);
+        feed.calendar = calendar(vec![calendar_row("SVC1", "20240101", Weekday::Mon, &feed)]);
+
+        assert!(run(&mut feed).is_empty());
+    }
+
+    /// A calendar row with start_date after end_date collapses to the start
+    /// date, as CalendarUtil does, instead of producing no dates.
+    #[test]
+    fn inverted_calendar_range_collapses_to_start_date() {
+        let mut feed = base_feed();
+        feed.trips.rows = vec![
+            trip("T1", "SVC1", "BLOCK1", &feed),
+            trip("T2", "SVC1", "BLOCK1", &feed),
+        ];
+        feed.stop_times.rows = stop_times_for_trip("T1", "08:00:00", "09:00:00", &feed);
+        feed.stop_times
+            .rows
+            .extend(stop_times_for_trip("T2", "08:30:00", "09:30:00", &feed));
+        let mut inverted = calendar_row("SVC1", "20240101", Weekday::Mon, &feed);
+        inverted.end_date = GtfsDate::parse("20231201").unwrap();
+        feed.calendar = calendar(vec![inverted]);
+
+        let notices = run(&mut feed);
+        assert_eq!(notices.len(), 1);
+        assert_eq!(
+            notices[0]
+                .context
+                .get("intersection")
+                .and_then(|v| v.as_str()),
+            Some("20240101")
         );
     }
 
@@ -461,6 +650,24 @@ mod tests {
         }
     }
 
+    fn stop_time(
+        trip_id: &str,
+        stop_id: &str,
+        stop_sequence: u32,
+        arrival: &str,
+        departure: &str,
+        feed: &GtfsFeed,
+    ) -> StopTime {
+        StopTime {
+            trip_id: feed.pool.intern(trip_id),
+            stop_id: feed.pool.intern(stop_id),
+            stop_sequence,
+            arrival_time: Some(GtfsTime::parse(arrival).unwrap()),
+            departure_time: Some(GtfsTime::parse(departure).unwrap()),
+            ..Default::default()
+        }
+    }
+
     fn stop_times_for_trip(
         trip_id: &str,
         start: &str,
@@ -468,22 +675,8 @@ mod tests {
         feed: &GtfsFeed,
     ) -> Vec<StopTime> {
         vec![
-            StopTime {
-                trip_id: feed.pool.intern(trip_id),
-                stop_id: feed.pool.intern("STOP1"),
-                stop_sequence: 1,
-                arrival_time: Some(GtfsTime::parse(start).unwrap()),
-                departure_time: Some(GtfsTime::parse(start).unwrap()),
-                ..Default::default()
-            },
-            StopTime {
-                trip_id: feed.pool.intern(trip_id),
-                stop_id: feed.pool.intern("STOP2"),
-                stop_sequence: 2,
-                arrival_time: Some(GtfsTime::parse(end).unwrap()),
-                departure_time: Some(GtfsTime::parse(end).unwrap()),
-                ..Default::default()
-            },
+            stop_time(trip_id, "STOP1", 1, start, start, feed),
+            stop_time(trip_id, "STOP2", 2, end, end, feed),
         ]
     }
 
@@ -494,43 +687,22 @@ mod tests {
         feed: &GtfsFeed,
     ) -> Calendar {
         let date = GtfsDate::parse(date_str).unwrap();
+        let on = |day: Weekday| {
+            if weekday == day {
+                ServiceAvailability::Available
+            } else {
+                ServiceAvailability::Unavailable
+            }
+        };
         Calendar {
             service_id: feed.pool.intern(service_id),
-            monday: if weekday == Weekday::Mon {
-                ServiceAvailability::Available
-            } else {
-                ServiceAvailability::Unavailable
-            },
-            tuesday: if weekday == Weekday::Tue {
-                ServiceAvailability::Available
-            } else {
-                ServiceAvailability::Unavailable
-            },
-            wednesday: if weekday == Weekday::Wed {
-                ServiceAvailability::Available
-            } else {
-                ServiceAvailability::Unavailable
-            },
-            thursday: if weekday == Weekday::Thu {
-                ServiceAvailability::Available
-            } else {
-                ServiceAvailability::Unavailable
-            },
-            friday: if weekday == Weekday::Fri {
-                ServiceAvailability::Available
-            } else {
-                ServiceAvailability::Unavailable
-            },
-            saturday: if weekday == Weekday::Sat {
-                ServiceAvailability::Available
-            } else {
-                ServiceAvailability::Unavailable
-            },
-            sunday: if weekday == Weekday::Sun {
-                ServiceAvailability::Available
-            } else {
-                ServiceAvailability::Unavailable
-            },
+            monday: on(Weekday::Mon),
+            tuesday: on(Weekday::Tue),
+            wednesday: on(Weekday::Wed),
+            thursday: on(Weekday::Thu),
+            friday: on(Weekday::Fri),
+            saturday: on(Weekday::Sat),
+            sunday: on(Weekday::Sun),
             start_date: date,
             end_date: date,
         }

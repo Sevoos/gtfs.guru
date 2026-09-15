@@ -47,7 +47,7 @@
         <div><dt>Severity</dt><dd>ERROR</dd></div>
         <div><dt>Affected files</dt><dd>1</dd></div>
         <div><dt>Report fields</dt><dd>8</dd></div>
-        <div><dt>Documentation</dt><dd>Generated</dd></div>
+        <div><dt>Documentation</dt><dd>Curated</dd></div>
       </dl>
     </section>
     <div class="article-layout">
@@ -57,7 +57,7 @@
         <a href="#impact">Why it matters</a>
         <a href="#files">Files and fields</a>
         <a href="#fix">How to fix</a>
-
+        <a href="#example">Example</a>
         <a href="#references">References</a>
         <a href="#related">Related notices</a>
       </aside>
@@ -71,7 +71,7 @@
         <section id="impact">
           <p class="section-kicker">Operational effect</p>
           <h2>Why it matters</h2>
-          <p>This is a GTFS requirement violation. Consumers may reject the affected data or interpret it incorrectly.</p>
+          <p>A block tells riders they can stay on the vehicle between trips. Two trips in one block that run at the same time on the same service day cannot both be served by that vehicle, so in-seat transfers and vehicle assignment break. The report&#39;s `intersection` is the first service date (YYYYMMDD) on which both trips are active. A trip whose last stop repeats the exact arrival/departure pair of the next trip&#39;s first stop is a block transfer, not an overlap; trips whose services share no active date never overlap, even under the same service_id.</p>
         </section>
         <section id="files">
           <p class="section-kicker">Scope</p>
@@ -83,7 +83,7 @@
             <tr><td><code>blockId</code></td><td>string</td><td>The `trips.block_id` of the overlapping trip.</td></tr>
             <tr><td><code>csvRowNumberA</code></td><td>integer</td><td>The row number from `trips.txt` of the first faulty trip.</td></tr>
             <tr><td><code>csvRowNumberB</code></td><td>integer</td><td>The row number from `trips.txt` of the second faulty trip.</td></tr>
-            <tr><td><code>intersection</code></td><td>object</td><td>The overlapping period.</td></tr>
+            <tr><td><code>intersection</code></td><td>string</td><td>The overlapping period.</td></tr>
             <tr><td><code>serviceIdA</code></td><td>string</td><td>The service id of the first faulty trip.</td></tr>
             <tr><td><code>serviceIdB</code></td><td>string</td><td>The service id of the other faulty trip.</td></tr>
             <tr><td><code>tripIdA</code></td><td>string</td><td>The id of first faulty trip.</td></tr>
@@ -93,12 +93,29 @@
         <section id="fix">
           <p class="section-kicker">Repair</p>
           <h2>How to fix it</h2>
-          <p>Use the evidence in the report to identify the failing record, then make the smallest source-data change that satisfies the rule.</p>
+          <p>Fix the stop times of one of the trips, move it to another block, or give the two trips services that do not run on the same dates.</p>
           <ol class="steps">
-            <li><span>1</span><div><strong>Locate the record</strong><p>Open the file named in the validation report and use the report fields below to find the exact row.</p></div></li>
-            <li><span>2</span><div><strong>Change the source data</strong><p>Apply the requirement described above without changing unrelated rows.</p></div></li>
+            <li><span>1</span><div><strong>Locate the record</strong><p>Open stop_times.txt and use the report fields below to find the exact row.</p></div></li>
+            <li><span>2</span><div><strong>Change the source data</strong><p>Fix the stop times of one of the trips, move it to another block, or give the two trips services that do not run on the same dates.</p></div></li>
             <li><span>3</span><div><strong>Validate again</strong><p>Rebuild the GTFS archive and confirm that <code>block_trips_with_overlapping_stop_times</code> no longer appears for the record.</p></div></li>
           </ol>
+        </section>
+        <section id="example">
+          <p class="section-kicker">Worked example</p>
+          <h2>Bad row and correction</h2>
+          <div class="example-grid">
+            <div><h3>Before</h3><pre><code>trip_id,arrival_time,departure_time,stop_id,stop_sequence
+T1,08:00:00,08:00:00,S1,1
+T1,09:00:00,09:00:00,S2,2
+T2,08:30:00,08:30:00,S3,1
+T2,09:30:00,09:30:00,S4,2</code></pre></div>
+            <div><h3>After</h3><pre><code>trip_id,arrival_time,departure_time,stop_id,stop_sequence
+T1,08:00:00,08:00:00,S1,1
+T1,09:00:00,09:00:00,S2,2
+T2,09:00:00,09:00:00,S2,1
+T2,09:30:00,09:30:00,S4,2</code></pre></div>
+          </div>
+          <p class="example-note">Simplified example for <code>stop_times.txt</code>; keep all other required columns from your feed.</p>
         </section>
         <section id="references">
           <p class="section-kicker">Sources</p>

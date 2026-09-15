@@ -1,0 +1,409 @@
+{
+  "version": 1,
+  "description": "Fifty MobilityDatabase schedule feeds chosen to cover countries, features and sizes beyond the 12-feed pinned corpus. Each is the latest.zip snapshot fetched on the date below; sha256 records which bytes the expected deltas were triaged against, and mdb_parity.py warns (does not fail) when a local zip differs. The zips live under benchmark-feeds/mdb-50/zips/ and are never committed. See docs/real-world-parity.md.",
+  "latest_url_template": "https://files.mobilitydatabase.org/{feed_id}/latest.zip",
+  "fetched": "2026-09-15",
+  "date": "2026-09-15",
+  "feeds": [
+    {
+      "feed_id": "jbda-agematsutown-agematu",
+      "provider": "上松町",
+      "country_code": "JP",
+      "reason": "cover country: JP",
+      "sha256": "99734b8dba4206c54ae4803c1aa8f85f16093d7029721faa9d97b003a914e73c",
+      "zip_bytes": 8431
+    },
+    {
+      "feed_id": "mdb-1040",
+      "provider": "Kautra",
+      "country_code": "LT",
+      "reason": "cover country: LT",
+      "sha256": "60d236eee63e5a83bdd597b03b1585f921c2c2528ab2cc2732aa92ce23e8b012",
+      "zip_bytes": 144972
+    },
+    {
+      "feed_id": "mdb-1103",
+      "provider": "Transport for Greater Manchester Arriva in the North West, Atlantic Travel, Bestway Travel, Belle Vue Coaches, Blackburn Private Hire, The Burnley Bus Company, Bullocks Coaches, Cumfy Bus, D&G Bus, Don Fraser Coaches Ltd, Finch Coaches, First Halifax, Calder Valley & Huddersfield, First in Greater Manchester, Little Gem, Go North West, Diamond Bus North West, Harris Travel, Hattons Transport, Hiltons Travel, High Peak, Huyton Travel, Holmeswood Coaches, Link Network, The Blackburn Bus Company, Maghull Coaches, Metrolink, Olympia Travel UK Ltd, Preston Bus, Nexus Move, Rosso, Tyrers, Stagecoach Merseyside and South Lancashire, Stagecoach in Greater Manchester, Selwyn's Travel, South Pennine C.T., Stotts, Travel Assist, Team Pennine, Viking Coaches, Vision Bus, Warrington's Own Buses",
+      "country_code": "GB",
+      "reason": "cover country: GB",
+      "sha256": "688bde8d746458f1e6774d43b7059f920877aec3a14e50a12412391042b763b1",
+      "zip_bytes": 41775837
+    },
+    {
+      "feed_id": "mdb-1824",
+      "provider": "METRO İZMİR",
+      "country_code": "TR",
+      "reason": "cover country: TR",
+      "sha256": "c1a86738dac8de3749aff96f0ce92f432be6a4e9ce67769c2854a530f92ce5fd",
+      "zip_bytes": 116277
+    },
+    {
+      "feed_id": "mdb-1831",
+      "provider": "Office of Transport and Traffic Policy and Planning",
+      "country_code": "TH",
+      "reason": "cover country: TH",
+      "sha256": "5867e3cddb9b52316d8a2fc0025395c969a12495c2fd0bd17298d33c1020f5cc",
+      "zip_bytes": 41844260
+    },
+    {
+      "feed_id": "mdb-1901",
+      "provider": "Dopravní podnik města Olomouce, a. s.",
+      "country_code": "CZ",
+      "reason": "cover country: CZ (replaced mdb-767)",
+      "sha256": "d84eca824a200bc2427a579f55a70c63a4b14a2c99f77afc228a4ceb3739eb66",
+      "zip_bytes": 1439815
+    },
+    {
+      "feed_id": "mdb-1984",
+      "provider": "Consiliul Judetean Vrancea",
+      "country_code": "RO",
+      "reason": "cover country: RO",
+      "sha256": "40de94bcefbd0462bc6e9337bb973db6ef0f1bb473fc6943111ad2b0aac1e6c7",
+      "zip_bytes": 123538
+    },
+    {
+      "feed_id": "mdb-1985",
+      "provider": "Aeroexpreso",
+      "country_code": "PE",
+      "reason": "cover country: PE",
+      "sha256": "afb97313e277d631e471d56cb958d802dca3018e9ace5597b3122931d1b288ae",
+      "zip_bytes": 628028
+    },
+    {
+      "feed_id": "mdb-205",
+      "provider": "Metro Transit",
+      "country_code": "US",
+      "reason": "pinned real-world corpus",
+      "sha256": "b791eec538a831b2e14784ccd5e9f09286a1da60813b37f1f1b2851d7a24105c",
+      "zip_bytes": 24360108
+    },
+    {
+      "feed_id": "mdb-2053",
+      "provider": "Systemaufgaben Kundeninformation SKI+",
+      "country_code": "CH",
+      "reason": "cover country: CH",
+      "sha256": "18af20f1a130b393134ede4e1fdc907840d531fdac532ec69b4b9d4c2576e0c9",
+      "zip_bytes": 41663
+    },
+    {
+      "feed_id": "mdb-2119",
+      "provider": "Trolleybus Transport Pleven",
+      "country_code": "BG",
+      "reason": "cover country: BG",
+      "sha256": "eba52b7955f0d42adc5c42ea5fb5518330c1a54fb9b725c0bc72f4031d698c9e",
+      "zip_bytes": 231960
+    },
+    {
+      "feed_id": "mdb-2433",
+      "provider": "Avon Transit",
+      "country_code": "US",
+      "reason": "pinned real-world corpus",
+      "sha256": "02469324dd4e2dfb51937efc7befffd2ac6e8cfd1f46bb9e28ba91a514bd34f1",
+      "zip_bytes": 30490
+    },
+    {
+      "feed_id": "mdb-2457",
+      "provider": "Hyderabad Metro Rail Ltd.",
+      "country_code": "IN",
+      "reason": "cover country: IN",
+      "sha256": "ed801427b35ac0760092d13eccf65d71cd299910c2ab80e1de54cf21f33727f1",
+      "zip_bytes": 2958001
+    },
+    {
+      "feed_id": "mdb-2635",
+      "provider": "Dublin Bus",
+      "country_code": "IE",
+      "reason": "cover country: IE (replaced mdb-2364)",
+      "sha256": "2bd50d32ee4062bdccedb67d8a35d588776678de4c4b00977a3246f68e497160",
+      "zip_bytes": 37535489
+    },
+    {
+      "feed_id": "mdb-2824",
+      "provider": "Alavabus",
+      "country_code": "ES",
+      "reason": "cover feature: Text-to-Speech",
+      "sha256": "0edd6d220b5e9a33dc42b86e63a3ac114cfe32a16a4b1f1e64ebefc08cee9b78",
+      "zip_bytes": 1989532
+    },
+    {
+      "feed_id": "mdb-2910",
+      "provider": "Gradski parking d.o.o.",
+      "country_code": "HR",
+      "reason": "cover country: HR",
+      "sha256": "6fd33879adc8a57e66fab75dbdcebc9136b383be0e7a7274e0accb4561530128",
+      "zip_bytes": 38602
+    },
+    {
+      "feed_id": "mdb-2938",
+      "provider": "Mandai Wildlife Reserve",
+      "country_code": "SG",
+      "reason": "cover country: SG",
+      "sha256": "bc515723cf59541e5c6639c5999ab411b30050b417cdac4b204f438291d8c133",
+      "zip_bytes": 12298
+    },
+    {
+      "feed_id": "mdb-2941",
+      "provider": "NOMAGO, storitve mobilnosti in potovanj, d.o.o.",
+      "country_code": "SI",
+      "reason": "cover country: SI (replaced mdb-1827)",
+      "sha256": "f8ae85649c7580d3f6690e0e31f068380201785315afd9ec5db0e782905f0239",
+      "zip_bytes": 23922
+    },
+    {
+      "feed_id": "mdb-3047",
+      "provider": "Tallinna Linn",
+      "country_code": "EE",
+      "reason": "cover country: EE",
+      "sha256": "655b57c6284bd6e0dfbbfaac1fef067b65b1ca7fa6c9647e31e977e9fc51cc7e",
+      "zip_bytes": 5357186
+    },
+    {
+      "feed_id": "mdb-3133",
+      "provider": "Algoa Bus",
+      "country_code": "ZA",
+      "reason": "cover country: ZA",
+      "sha256": "6e8694051aa7ddead854a698cdaacd49315d08791c0efa065b604f60fc01b739",
+      "zip_bytes": 962044
+    },
+    {
+      "feed_id": "mdb-3154",
+      "provider": "DZK",
+      "country_code": "SK",
+      "reason": "cover country: SK",
+      "sha256": "1a4407d67900dc0e5c299867cc176d55eef023b1350b991841cbf6b8de717acc",
+      "zip_bytes": 5375
+    },
+    {
+      "feed_id": "mdb-3157",
+      "provider": "BAS.MY Kangar",
+      "country_code": "MY",
+      "reason": "cover country: MY",
+      "sha256": "40d452f477901591377749880464d6599da8988851a71b83914ea40c97fc7242",
+      "zip_bytes": 1287
+    },
+    {
+      "feed_id": "mdb-3188",
+      "provider": "Transporte Público Urbano de Ibagué",
+      "country_code": "CO",
+      "reason": "cover country: CO (replaced mdb-3358)",
+      "sha256": "7cf772c89dec4ac1a0f97e709c9db519ad8d146caaf2121fe624c149ed29c050",
+      "zip_bytes": 354398
+    },
+    {
+      "feed_id": "mdb-3218",
+      "provider": "Dallas Host Committee",
+      "country_code": "US",
+      "reason": "pinned real-world corpus",
+      "sha256": "b739d749405aa6d7a07e0217dcfa65f8c029baa6e0de5541d7f87b92434d0df0",
+      "zip_bytes": 11766
+    },
+    {
+      "feed_id": "mdb-3220",
+      "provider": "Athens Urban Transport Organization (OASA) - Road Transport Routes",
+      "country_code": "GR",
+      "reason": "cover country: GR",
+      "sha256": "0e8c0caf5d83c5a43c5b87f4ccf536f0a56fbd2ec2b779e803b62622d0f96fbb",
+      "zip_bytes": 30253202
+    },
+    {
+      "feed_id": "mdb-3234",
+      "provider": "Verkehrsverbund Berlin-Brandenburg (VBB)",
+      "country_code": "DE",
+      "reason": "pinned real-world corpus",
+      "sha256": "cedb6543a7b55ca6accd8606e2256cae7b003891460abf72b0c4fe5f8fbb78d2",
+      "zip_bytes": 38464
+    },
+    {
+      "feed_id": "mdb-3238",
+      "provider": "UL",
+      "country_code": "SE",
+      "reason": "cover country: SE (replaced mdb-2661)",
+      "sha256": "bc7626c83a06258ef5f7645e09b60bee4fdbd20d601b22b2017a40a62bb7d52a",
+      "zip_bytes": 23242120
+    },
+    {
+      "feed_id": "mdb-3243",
+      "provider": "KLT",
+      "country_code": "DK",
+      "reason": "cover country: DK (replaced mdb-1292)",
+      "sha256": "a07d0459a28dd7ed8de14455e976cf75dcabc65d7d1d0ca4acf2179f4121df40",
+      "zip_bytes": 19334663
+    },
+    {
+      "feed_id": "mdb-3274",
+      "provider": "SJ Norge",
+      "country_code": "NO",
+      "reason": "cover country: NO",
+      "sha256": "51d60c02d6798bd77db93aca15c6ac22f9f4b4c96e4868c0901aa7a57de9de7f",
+      "zip_bytes": 5816
+    },
+    {
+      "feed_id": "mdb-3357",
+      "provider": "Red Metropolitana de Movilida, EFE Trenes de Chile, Bus de Acercamiento Aeropuerto, Metro de Santiago",
+      "country_code": "CL",
+      "reason": "cover country: CL",
+      "sha256": "acc7705c77f5bf49eda13af9805b9dd8a417777f5d4aba3bb8b6b44bbc622cba",
+      "zip_bytes": 10747530
+    },
+    {
+      "feed_id": "mdb-3491",
+      "provider": "Mi Teleférico",
+      "country_code": "BO",
+      "reason": "cover feature: Cars Allowed",
+      "sha256": "bcfdc636483d5c50465cdca7f245b39e9db040e07f338344bb8e55a990e7e103",
+      "zip_bytes": 13914
+    },
+    {
+      "feed_id": "mdb-470",
+      "provider": "Maryland Transit Administration Metro Subway",
+      "country_code": "US",
+      "reason": "pinned real-world corpus",
+      "sha256": "7d536b02798b35bcd36c64f6faacb11f042e1dee520237f9cb3f7d75ac4e881b",
+      "zip_bytes": 56280
+    },
+    {
+      "feed_id": "mdb-502",
+      "provider": "Southeastern Pennsylvania Transportation Authority (SEPTA)",
+      "country_code": "US",
+      "reason": "pinned real-world corpus",
+      "sha256": "d9dfae6750923cf5f4e50b0fe7d8d757e2c4de45218815678efa54a2e37cbafd",
+      "zip_bytes": 20124576
+    },
+    {
+      "feed_id": "mdb-503",
+      "provider": "Southeastern Pennsylvania Transportation Authority (SEPTA)",
+      "country_code": "US",
+      "reason": "pinned real-world corpus",
+      "sha256": "0fb27161359ce214af282b3b1bb46ab16aadc9f779dad541039e1b452508ad4c",
+      "zip_bytes": 643003
+    },
+    {
+      "feed_id": "mdb-650",
+      "provider": "Translink Magnetic Island",
+      "country_code": "AU",
+      "reason": "cover country: AU",
+      "sha256": "fe4c1888de4387b01b27e776fcb983d3f08a6ca0ebcc8e42013b181126d1011e",
+      "zip_bytes": 32609
+    },
+    {
+      "feed_id": "mdb-686",
+      "provider": "Société nationale des chemins de fer belges (NMBS-SNCB)",
+      "country_code": "BE",
+      "reason": "cover country: BE (replaced mdb-684)",
+      "sha256": "7d9f345f36f3f2ff211932df37cf12510d984a3f23641719ee8a694d9034c1af",
+      "zip_bytes": 8685405
+    },
+    {
+      "feed_id": "mdb-763",
+      "provider": "Société de transport de Lévis",
+      "country_code": "CA",
+      "reason": "pinned real-world corpus",
+      "sha256": "3df722315a31f84b51c249458a0b8bd05f3441edf8df73c14144d39a5d029af5",
+      "zip_bytes": 1773531
+    },
+    {
+      "feed_id": "mdb-768",
+      "provider": "Long-distance rail transport in Germany",
+      "country_code": "AT",
+      "reason": "cover country: AT (replaced mdb-648)",
+      "sha256": "faa2fe465b9483ea24d9faa8eb17fbe3c61cf25d37345a20adc408fc44846b39",
+      "zip_bytes": 412477
+    },
+    {
+      "feed_id": "mdb-8",
+      "provider": "São Paulo Transporte (SPTrans)",
+      "country_code": "BR",
+      "reason": "cover country: BR",
+      "sha256": "1e67f0cc52a8ea9227761c652eea785f789b0a2e21708f26fe115a3f837c1328",
+      "zip_bytes": 14293504
+    },
+    {
+      "feed_id": "mdb-84",
+      "provider": "Nevada County Connects (Gold Country Stage)",
+      "country_code": "US",
+      "reason": "pinned real-world corpus",
+      "sha256": "35813c7a77d2a27331a9cadc01dba45f0c4c65a8f40fd13c194d66ad11bb3c8f",
+      "zip_bytes": 302412
+    },
+    {
+      "feed_id": "mdb-854",
+      "provider": "Azienda Trasporti Automobilistici Pubblici delle Province di Biella e Vercelli (ATAP)",
+      "country_code": "IT",
+      "reason": "cover country: IT",
+      "sha256": "80e356242e28190e919b36162575130a52f70faa1985de9f50b86a3312ceea9b",
+      "zip_bytes": 372523
+    },
+    {
+      "feed_id": "mdb-861",
+      "provider": "BIOKOM",
+      "country_code": "HU",
+      "reason": "cover country: HU",
+      "sha256": "c1cf983997f25d3539faa2ae717a3855ceedf2584ceb51943dee8968ca35892c",
+      "zip_bytes": 2025655
+    },
+    {
+      "feed_id": "mdb-864",
+      "provider": "Turku",
+      "country_code": "FI",
+      "reason": "cover country: FI",
+      "sha256": "231e120ebf47c8951e1b194731a485ce610674393f1fd9bb4765100eb870ceb6",
+      "zip_bytes": 10987651
+    },
+    {
+      "feed_id": "mdb-981",
+      "provider": "Zarząd Dróg i Transportu Miejskiego (ZDiTM)",
+      "country_code": "PL",
+      "reason": "cover country: PL",
+      "sha256": "4497bbe01b419b69dd29c011e2fa23fe30c1c51a7946d23f5d3831463615ca7b",
+      "zip_bytes": 4695689
+    },
+    {
+      "feed_id": "mdb-983",
+      "provider": "Otago Regional Council (ORC)",
+      "country_code": "NZ",
+      "reason": "cover country: NZ",
+      "sha256": "d7780bd8787c1b3fcea91c2fe3ddb499afa29426b0cc1e671587ee9406c76f75",
+      "zip_bytes": 780676
+    },
+    {
+      "feed_id": "mdb-992",
+      "provider": "Valsts SIA Autotransporta Direkcija (ATD)",
+      "country_code": "LV",
+      "reason": "cover country: LV",
+      "sha256": "2b023e1f54489246963631b69cf81793dc4166a073059db105fcd759d4dc25c7",
+      "zip_bytes": 29119973
+    },
+    {
+      "feed_id": "tdg-81394",
+      "provider": "Région des Pays de la Loire",
+      "country_code": "FR",
+      "reason": "pinned real-world corpus",
+      "sha256": "a61dce119740ae1df5decedafbdebf404f8d2cca8b53d4c48ef87262a1b7159f",
+      "zip_bytes": 2185581
+    },
+    {
+      "feed_id": "tdg-83024",
+      "provider": "Bordeaux Métropole",
+      "country_code": "FR",
+      "reason": "pinned real-world corpus",
+      "sha256": "c71ed5ae0c13cec5475eadc15e766de322013c6db7b9ed68dc171d6b62a9a171",
+      "zip_bytes": 26489773
+    },
+    {
+      "feed_id": "tld-4056",
+      "provider": "Strætó BS, Reykjanesbær, Akureyri",
+      "country_code": "IS",
+      "reason": "cover country: IS",
+      "sha256": "893463accb5494ee6c3f1c95c4b1eb81a4342839308c9fe0dc664622bba5cfd0",
+      "zip_bytes": 12807917
+    },
+    {
+      "feed_id": "tld-716",
+      "provider": "Metro de Lisboa (Metro)",
+      "country_code": "PT",
+      "reason": "pinned real-world corpus",
+      "sha256": "79480fbe7cedb1c72bba2e2d62245107d7d979d6b1b50d6a7c0c5e8e94815956",
+      "zip_bytes": 498790
+    }
+  ]
+}

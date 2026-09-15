@@ -1,4 +1,11 @@
 {
+  "block_trips_with_overlapping_stop_times": {
+    "impact": "A block tells riders they can stay on the vehicle between trips. Two trips in one block that run at the same time on the same service day cannot both be served by that vehicle, so in-seat transfers and vehicle assignment break. The report's `intersection` is the first service date (YYYYMMDD) on which both trips are active. A trip whose last stop repeats the exact arrival/departure pair of the next trip's first stop is a block transfer, not an overlap; trips whose services share no active date never overlap, even under the same service_id.",
+    "fix": "Fix the stop times of one of the trips, move it to another block, or give the two trips services that do not run on the same dates.",
+    "file": "stop_times.txt",
+    "bad": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,S1,1\nT1,09:00:00,09:00:00,S2,2\nT2,08:30:00,08:30:00,S3,1\nT2,09:30:00,09:30:00,S4,2",
+    "good": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,S1,1\nT1,09:00:00,09:00:00,S2,2\nT2,09:00:00,09:00:00,S2,1\nT2,09:30:00,09:30:00,S4,2"
+  },
   "duplicate_route_name": {
     "impact": "Riders can see indistinguishable routes, and consumers may merge or label distinct services ambiguously.",
     "fix": "Give routes in the same agency and mode a unique short/long-name combination. Model opposite directions as trips of one route, not as duplicate routes.",

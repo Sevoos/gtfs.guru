@@ -7,6 +7,49 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `block_trips_with_overlapping_stop_times` now follows the canonical
+  validator step for step: a trip's interval is its first and last stop_time
+  by `stop_sequence` (both need arrival and departure), a pair whose boundary
+  stop repeats the same arrival/departure is a block transfer and not an
+  overlap, and two trips only overlap on a date both services are active on,
+  with no shortcut for identical `service_id`s. `intersection` is that first
+  shared date (`YYYYMMDD`) instead of a time range. Hyderabad (mdb-2457) loses
+  793 false errors and SNCB (mdb-686) 177.
+- `non_ascii_or_non_printable_char` no longer fires on the `_id` fields the
+  canonical validator does not type as IDs: `frequencies.trip_id`,
+  `translations.record_id` / `record_sub_id`, `timeframes.service_id`,
+  `location_group_stops.location_group_id` / `stop_id`,
+  `booking_rules.prior_notice_service_id` and `trips.direction_id`.
+- The CSV reader applies univocity's field boundaries before parsing (GTF-35):
+  whitespace around a bare field is dropped, a quote after that whitespace
+  still opens the field, whitespace inside quotes is kept. `817, "DUS"` is now
+  the value `DUS`, not `"DUS"` (Latvia, mdb-992: 28 false
+  `mixed_case_recommended_field`), and `leading_or_trailing_whitespaces` is
+  reported in default mode exactly when the canonical validator reports it,
+  so it no longer needs `--thorough`.
+- `mixed_case_recommended_field` tokenises like Java's `[^\p{L}]+`: combining
+  vowel signs and tone marks (Thai, Lao, Indic scripts) split a word into
+  several caseless tokens, lengths count UTF-16 units, and the notice is held
+  back on rows whose fields failed to parse, as Java's entity validators never
+  see those rows.
+- Shape-to-stop matching uses an operation-for-operation port of
+  `S2EdgeUtil.getClosestPoint`, `S2LatLng` and `S2LatLng.getDistance`, so
+  near-ties on degenerate shapes (a polyline jittering between two points
+  centimetres apart, or repeated points) resolve the way the canonical
+  validator resolves them. Thailand (mdb-1831) `stop_has_too_many_matches_for_shape`
+  goes from 57 to Java's 63 and `stops_match_shape_out_of_order` from 75 to 71
+  against 72; the last pair differs in the final ulp of a trig call.
+
+### Added
+
+- `scripts/mdb_parity.py`: the mdb-50 catalogue parity check. Fifty
+  MobilityDatabase feeds pinned in `scripts/real_world/mdb50.json`, both
+  validators on the same zips, a per-feed diff classified against
+  `expected_deltas.json` and `mdb50_expected_deltas.json`. 46 of 50 feeds are
+  exact and 50 of 50 exact-on-shared; see `docs/real-world-parity.md`.
+
 ## [1.0.0] - 2026-09-15
 
 First stable release. The CLI, core, model, report, profile, MCP, web, WASM,

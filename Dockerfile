@@ -52,6 +52,11 @@ WORKDIR /app
 # Copy the binary from the builder stage
 COPY --from=builder /usr/src/app/target/release/gtfs-guru-web .
 
+# The commit this image was built from; /version reports it so a deploy can
+# confirm the live site runs the image it just shipped.
+ARG GIT_SHA=""
+ENV GTFS_GURU_BUILD_COMMIT=$GIT_SHA
+
 # Create data directory with proper permissions
 RUN mkdir -p /data/jobs && chown -R gtfs:gtfs /data /app
 

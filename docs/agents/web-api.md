@@ -18,6 +18,10 @@
 - `GTFS_VALIDATOR_WEB_MAX_CONCURRENT_UPLOADS` caps concurrent upload streams (default: 4).
 - `GTFS_VALIDATOR_WEB_MAX_CREATE_JOB_REQUESTS_PER_MINUTE` rate-limits `POST /create-job` (default: 60).
 - `GTFS_VALIDATOR_WEB_PROCESSING_TIMEOUT_SECONDS` reclaims jobs stuck in `Processing` (default: 1800).
+- `GTFS_VALIDATOR_WEB_UPLOAD_IDLE_TIMEOUT_SECONDS` abandons an upload that stalls
+  between body chunks (default: 60). Without it a half-finished `PUT /upload/:id`
+  holds its upload and admission permits until the client disconnects.
+- `GTFS_VALIDATOR_WEB_UPLOAD_TIMEOUT_SECONDS` caps the whole upload (default: 1800).
 - `GTFS_VALIDATOR_WEB_PUBSUB_TOKEN` is required for `POST /run-validator`. Send it as
   `x-pubsub-token` or `Authorization: Bearer ...`. Unset or empty → 401.
 - `GTFS_VALIDATOR_MAX_MEMBER_BYTES` / `GTFS_VALIDATOR_MAX_TOTAL_BYTES` cap zip

@@ -19,6 +19,18 @@
 const MAX_FILE_SIZE_BYTES = 150 * 1024 * 1024;
 const MAX_UNCOMPRESSED_BYTES = 700 * 1024 * 1024;
 
+// A worker that dies mid-run is only credibly out of memory once the feed is
+// substantial: wasm32 does not exhaust its heap on a few megabytes. Below this
+// unpacked size a dead worker is a broken build, a failed module import, or a
+// panic, and is reported as such instead of being blamed on the feed's size.
+const OOM_PLAUSIBLE_RAW_BYTES = 64 * 1024 * 1024;
+
+// postMessage transfers (and detaches) the feed buffer, so retrying a crashed
+// run needs a second copy. Keep one for feeds small enough that the duplicate
+// costs nothing; larger feeds are exactly the ones where doubling memory would
+// cause the failure we are trying to survive.
+const RETRY_COPY_LIMIT_BYTES = 32 * 1024 * 1024;
+
 // Multithreaded (wasm threads) validation: ~5x faster on large feeds. Only
 // engages on cross-origin-isolated pages (COOP/COEP headers set server-side);
 // everything else falls back to the single-threaded worker automatically.
@@ -128,13 +140,53 @@ function getValidatorWorker() {
             rejectReady(new Error('__WORKER_UNAVAILABLE__'));
             if (p) p.reject(new Error('__WORKER_UNAVAILABLE__'));
         } else {
-            // It was running and died — almost always a hard OOM on a big feed.
-            if (p) p.reject(new Error('__OOM__'));
+            // It was running and died. A large feed really can exhaust the wasm
+            // heap, but so can a missing module import or a panic on a
+            // three-line feed, and calling all of those "too large" sends
+            // people hunting a size problem they do not have. Decide from the
+            // size actually submitted, and keep what the browser reported.
+            const detail = describeWorkerError(e, tier.name);
+            const outOfMemory = p ? looksLikeMemoryExhaustion(p) : false;
+            console.error(`Validator worker stopped (${detail})`);
+            if (!outOfMemory) {
+                // Not a memory problem, so this tier is broken rather than
+                // overloaded: step down to the next one, and once they are
+                // exhausted let validation fall back to the main thread.
+                if (workerTierIndex < WORKER_TIERS.length - 1) {
+                    workerTierIndex++;
+                } else {
+                    workerUsable = false;
+                }
+            }
+            if (p) {
+                const err = new Error(outOfMemory ? '__OOM__' : '__WORKER_CRASHED__');
+                err.detail = detail;
+                p.reject(err);
+            }
         }
     };
 
     validatorWorker = worker;
     return worker;
+}
+
+// What the browser could tell us about a worker that died. ErrorEvent from a
+// module worker is often bare (a failed import reports nothing but the event),
+// so say that explicitly rather than rendering "undefined".
+function describeWorkerError(event, tierName) {
+    const parts = [];
+    if (event && event.message) parts.push(event.message);
+    if (event && event.filename) parts.push(`${event.filename}:${event.lineno || 0}`);
+    return `${tierName} tier: ${parts.join(' ') ||
+        'no detail from the browser, which usually means the worker module or its WASM failed to load'}`;
+}
+
+// Could this run plausibly have exhausted the wasm heap?
+function looksLikeMemoryExhaustion({ rawBytes, zipBytes }) {
+    // Fall back to a conservative expansion factor when the central directory
+    // could not be read, so an unreadable zip is never called "too large".
+    const unpacked = typeof rawBytes === 'number' ? rawBytes : (zipBytes || 0) * 5;
+    return unpacked > OOM_PLAUSIBLE_RAW_BYTES;
 }
 
 // ---- Stops index for the error map ----
@@ -535,9 +587,13 @@ async function validateInWorker(arrayBuffer, dateStr) {
         workerReadyPromise,
         new Promise((_, rej) => setTimeout(() => rej(new Error('__WORKER_UNAVAILABLE__')), 10000)),
     ]);
+    // Read the sizes while the buffer is still ours: if the worker dies, they
+    // are the only evidence left for telling memory exhaustion from a crash.
+    const zipBytes = arrayBuffer.byteLength;
+    const rawBytes = sumUncompressedBytes(arrayBuffer);
     return new Promise((resolve, reject) => {
         const id = nextMsgId++;
-        pendingValidation = { id, resolve, reject };
+        pendingValidation = { id, resolve, reject, zipBytes, rawBytes };
         // Transfer (not copy) the ArrayBuffer — feeds can be up to 150 MB.
         validatorWorker.postMessage(
             { type: 'validate', id, payload: { zipBytes: arrayBuffer, date: dateStr } },
@@ -569,9 +625,14 @@ async function diffInWorker(oldArrayBuffer, newArrayBuffer, dateStr) {
         new Promise((_, reject) =>
             setTimeout(() => reject(new Error('__WORKER_UNAVAILABLE__')), 10000)),
     ]);
+    // Both feeds are resident at once, so the memory question is their sum.
+    const zipBytes = oldArrayBuffer.byteLength + newArrayBuffer.byteLength;
+    const oldRaw = sumUncompressedBytes(oldArrayBuffer);
+    const newRaw = sumUncompressedBytes(newArrayBuffer);
+    const rawBytes = oldRaw === null || newRaw === null ? null : oldRaw + newRaw;
     return new Promise((resolve, reject) => {
         const id = nextMsgId++;
-        pendingValidation = { id, resolve, reject };
+        pendingValidation = { id, resolve, reject, zipBytes, rawBytes };
         validatorWorker.postMessage(
             {
                 type: 'diff',
@@ -614,15 +675,26 @@ async function diffFeeds(oldArrayBuffer, newArrayBuffer, dateStr) {
     return diffOnMainThread(oldArrayBuffer, newArrayBuffer, dateStr);
 }
 
-// Validate via the worker, transparently falling back to the main thread if the
-// worker can't be loaded. A mid-validation OOM ('__OOM__') is NOT retried.
+// Validate via the worker, transparently falling back to the next tier and
+// finally to the main thread if the worker can't be loaded or dies on a feed
+// too small to have exhausted memory. A genuine OOM ('__OOM__') is NOT retried:
+// the same feed would only exhaust the heap again.
 async function validateFeed(arrayBuffer, dateStr) {
     if (workerUsable) {
+        const retryCopy = arrayBuffer.byteLength <= RETRY_COPY_LIMIT_BYTES
+            ? arrayBuffer.slice(0)
+            : null;
         try {
             return await validateInWorker(arrayBuffer, dateStr);
         } catch (err) {
-            if (err && err.message === '__WORKER_UNAVAILABLE__') {
+            const code = err && err.message;
+            if (code === '__WORKER_UNAVAILABLE__') {
                 // fall through to main-thread validation with the intact buffer
+            } else if (code === '__WORKER_CRASHED__' && retryCopy) {
+                // The tier was stepped down (or workers were given up on) as
+                // the worker died, so this retry lands somewhere else.
+                console.warn(`Retrying validation after a worker crash — ${err.detail}`);
+                return validateFeed(retryCopy, dateStr);
             } else {
                 throw err;
             }
@@ -887,8 +959,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Click to browse
-        uploadState.addEventListener('click', () => fileInput.click());
+        // Click to browse. The button inside the zone is the real control —
+        // it is focusable and it fires on Enter/Space — so the zone-level
+        // handler has to stand aside for it, or picking a file from the
+        // keyboard opens the dialog twice.
+        const chooseFileBtn = document.getElementById('choose-file-btn');
+        if (chooseFileBtn) {
+            chooseFileBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileInput.click();
+            });
+        }
+        uploadState.addEventListener('click', (e) => {
+            if (e.target.closest('button, a')) return;
+            fileInput.click();
+        });
 
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length) {
@@ -931,10 +1016,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tryDemoBtn) {
             tryDemoBtn.addEventListener('click', handleDemoFeed);
         }
+        // The hero button scrolls the validator into view first, so the report
+        // lands where the reader is already looking.
+        const heroDemoBtn = document.getElementById('hero-demo-btn');
+        if (heroDemoBtn) {
+            heroDemoBtn.addEventListener('click', () => {
+                document.getElementById('validator')?.scrollIntoView({
+                    behavior: reducedMotion.matches ? 'auto' : 'smooth',
+                    block: 'start',
+                });
+                handleDemoFeed();
+            });
+        }
 
         // Reset
         function resetValidator() {
             resultState.classList.add('hidden');
+            const issues = document.getElementById('result-issues');
+            if (issues) issues.innerHTML = '';
+            document.getElementById('mcp-preview')?.removeAttribute('open');
             diffResultState?.classList.add('hidden');
             setUploadUiVisible(true);
             fileInput.value = '';
@@ -1209,7 +1309,10 @@ Download the .zip and drop it here instead; validation still runs locally in you
             console.error('Feed comparison error:', err);
             const message = err?.message === '__OOM__'
                 ? 'These feeds were too large to compare in this browser. Use the desktop app or CLI.'
-                : (err?.message || 'Could not compare these feeds.');
+                : err?.message === '__WORKER_CRASHED__'
+                    ? 'The in-browser comparison failed to run on this page — this is a problem with the site, ' +
+                      `not with your feeds. Reload to try again, or use the desktop app or CLI. Details: ${err.detail}`
+                    : (err?.message || 'Could not compare these feeds.');
             showValidationError(message);
         }
     }
@@ -1509,6 +1612,14 @@ Download the .zip and drop it here instead; validation still runs locally in you
                 );
                 return;
             }
+            if (err && err.message === '__WORKER_CRASHED__') {
+                showValidationError(
+                    "The in-browser validator failed to run on this page — this is a problem with the site, " +
+                    "not with your feed. Reload to try again, or use the free desktop app or CLI. " +
+                    `Details for a bug report: ${err.detail}`
+                );
+                return;
+            }
             let msg = "Error processing file. See console for details.";
             if (typeof err === 'string') {
                 msg = err;
@@ -1540,45 +1651,7 @@ Download the .zip and drop it here instead; validation still runs locally in you
     function renderMcpPreview(result) {
         if (!mcpPreview || !mcpPreviewBody) return;
 
-        let notices = [];
-        try {
-            notices = JSON.parse(result.json) || [];
-        } catch (error) {
-            console.warn('MCP preview: could not parse notices', error);
-        }
-
-        const groups = new Map();
-        notices
-            .filter((notice) => notice.severity === 'ERROR' || notice.severity === 'WARNING')
-            .forEach((notice) => {
-                const key = `${notice.severity}:${notice.code}`;
-                let group = groups.get(key);
-                if (!group) {
-                    group = {
-                        code: notice.code,
-                        severity: notice.severity,
-                        examples: [],
-                        stored: 0,
-                        total: 0,
-                    };
-                    groups.set(key, group);
-                }
-                group.stored += 1;
-                if (group.examples.length < 3) group.examples.push(notice);
-                const exactTotal = Number(
-                    notice.totalNotices ?? result.totalsByCode?.[notice.code] ?? group.stored
-                );
-                group.total = Math.max(group.total, Number.isFinite(exactTotal) ? exactTotal : group.stored);
-            });
-
-        const priority = { ERROR: 0, WARNING: 1 };
-        const featuredGroups = [...groups.values()]
-            .sort((left, right) =>
-                priority[left.severity] - priority[right.severity]
-                || right.total - left.total
-                || left.code.localeCompare(right.code)
-            )
-            .slice(0, 3);
+        const featuredGroups = groupNoticesBySeverity(result, ['ERROR', 'WARNING']).slice(0, 3);
 
         const errors = Number(result.error_count) || 0;
         const warnings = Number(result.warning_count) || 0;
@@ -1640,8 +1713,190 @@ Download the .zip and drop it here instead; validation still runs locally in you
                    <p class="mcp-sample-note">Compact preview: MCP can return up to three examples for every issue type.</p>`
                 : '<p class="mcp-clean-note"><i data-lucide="circle-check"></i> There are no error or warning examples to send.</p>'}
         `;
-        mcpPreview.classList.remove('is-ready');
-        requestAnimationFrame(() => mcpPreview.classList.add('is-ready'));
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    // Groups the notice sample by code, errors before warnings, most frequent
+    // first. Both the inline issue list and the MCP preview read a feed the
+    // same way, so they agree on what the top problems are.
+    function groupNoticesBySeverity(result, severities) {
+        let notices = [];
+        try {
+            notices = JSON.parse(result.json) || [];
+        } catch (error) {
+            console.warn('Could not parse notices', error);
+            return [];
+        }
+
+        const groups = new Map();
+        notices
+            .filter((notice) => severities.includes(notice.severity))
+            .forEach((notice) => {
+                const key = `${notice.severity}:${notice.code}`;
+                let group = groups.get(key);
+                if (!group) {
+                    group = {
+                        code: notice.code,
+                        severity: notice.severity,
+                        examples: [],
+                        stored: 0,
+                        total: 0,
+                    };
+                    groups.set(key, group);
+                }
+                group.stored += 1;
+                if (group.examples.length < 3) group.examples.push(notice);
+                const exactTotal = Number(
+                    notice.totalNotices ?? result.totalsByCode?.[notice.code] ?? group.stored
+                );
+                group.total = Math.max(group.total, Number.isFinite(exactTotal) ? exactTotal : group.stored);
+            });
+
+        const priority = { ERROR: 0, WARNING: 1, INFO: 2 };
+        return [...groups.values()].sort((left, right) =>
+            priority[left.severity] - priority[right.severity]
+            || right.total - left.total
+            || left.code.localeCompare(right.code)
+        );
+    }
+
+    function humanizeCode(code) {
+        const words = String(code).replaceAll('_', ' ').trim();
+        return words.charAt(0).toUpperCase() + words.slice(1);
+    }
+
+    // file · row N · field, built from whichever of the context keys this
+    // notice actually carries.
+    function noticeLocationParts(notice) {
+        const parts = [];
+        const file = notice.file
+            || noticeContextValue(notice, 'filename')
+            || noticeContextValue(notice, 'childFilename');
+        const row = notice.row ?? noticeContextValue(notice, 'csvRowNumber');
+        const field = notice.field
+            || noticeContextValue(notice, 'fieldName')
+            || noticeContextValue(notice, 'childFieldName');
+        if (file) parts.push(String(file));
+        if (row !== null && row !== undefined) parts.push(`row ${row}`);
+        if (field) parts.push(String(field));
+
+        // Some notices carry no filename at all, only the entity they are
+        // about. Without this the card reads "row 4" and the reader has no
+        // idea which file to open.
+        const identifierKeys = ['stopId', 'routeId', 'tripId', 'serviceId', 'shapeId', 'agencyId'];
+        for (const key of identifierKeys) {
+            if (parts.length >= 4) break;
+            const value = noticeContextValue(notice, key);
+            if (value !== null) parts.push(`${key}=${value}`);
+        }
+        return parts;
+    }
+
+    // The report itself, not a teaser for it: what broke, where, and what to
+    // change, without a click. "See More" used to hide all of this behind a
+    // modal while a green tick sat on top of it.
+    function renderResultIssues(result) {
+        const container = document.getElementById('result-issues');
+        if (!container) return;
+
+        const errors = Number(result.error_count) || 0;
+        const warnings = Number(result.warning_count) || 0;
+
+        if (errors === 0 && warnings === 0) {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+            return;
+        }
+
+        const groups = groupNoticesBySeverity(result, ['ERROR', 'WARNING']);
+        if (!groups.length) {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+            return;
+        }
+
+        const shown = groups.slice(0, 4);
+        const remaining = groups.length - shown.length;
+
+        const cardsHtml = shown.map((group) => {
+            const notice = group.examples[0] || {};
+            const location = noticeLocationParts(notice);
+            const locationHtml = location.length
+                ? `<p class="issue-location">${location
+                    .map((part) => `<code>${escapeHtml(String(part))}</code>`)
+                    .join('<span aria-hidden="true">·</span>')}</p>`
+                : '';
+            const fix = notice.fix?.description
+                ? `<p class="issue-fix"><strong>Fix:</strong> ${escapeHtml(notice.fix.description)}</p>`
+                : '';
+            const severityLabel = group.severity === 'ERROR' ? 'Error' : 'Warning';
+            return `
+                <li class="issue-card ${group.severity.toLowerCase()}">
+                    <div class="issue-topline">
+                        <span class="issue-severity">${severityLabel}</span>
+                        <h4 class="issue-title">${escapeHtml(humanizeCode(group.code))}</h4>
+                        <span class="issue-count">${escapeHtml(countLabel(group.total, 'occurrence'))}</span>
+                    </div>
+                    ${locationHtml}
+                    <p class="issue-reason">${escapeHtml(notice.message || humanizeCode(group.code))}</p>
+                    ${fix}
+                    <a class="issue-doc-link" href="/notices/${encodeURIComponent(group.code)}/">
+                        <span class="issue-doc-label">How to fix</span>
+                        <code>${escapeHtml(group.code)}</code>
+                        <i data-lucide="arrow-right"></i>
+                    </a>
+                </li>
+            `;
+        }).join('');
+
+        const moreHtml = remaining > 0
+            ? `<p class="issue-more">${escapeHtml(countLabel(remaining, 'more issue type'))} in this feed — open the full list below.</p>`
+            : '';
+
+        container.innerHTML = `
+            <h3 class="result-issues-title">${errors > 0 ? 'Start with these' : 'Warnings to review'}</h3>
+            <ol class="issue-list">${cardsHtml}</ol>
+            ${moreHtml}
+        `;
+        container.classList.remove('hidden');
+    }
+
+    // Icon, wording and colour all follow the counts. Anything else here is a
+    // claim the report does not support.
+    function renderCompletionIndicator(result) {
+        const indicator = document.getElementById('completion-indicator');
+        const icon = document.getElementById('completion-icon');
+        const text = document.getElementById('completion-text');
+        const sub = document.getElementById('completion-sub');
+        if (!indicator || !icon || !text) return;
+
+        const errors = Number(result.error_count) || 0;
+        const warnings = Number(result.warning_count) || 0;
+
+        indicator.classList.remove('state-clean', 'state-warning', 'state-error');
+
+        if (errors > 0) {
+            indicator.classList.add('state-error');
+            icon.innerHTML = '<i data-lucide="alert-octagon"></i>';
+            text.textContent = `${countLabel(errors, 'error')} need fixing`;
+            if (sub) {
+                sub.textContent = warnings > 0
+                    ? `${countLabel(warnings, 'warning')} to review as well.`
+                    : 'Consumers can reject the feed until these are resolved.';
+            }
+        } else if (warnings > 0) {
+            indicator.classList.add('state-warning');
+            icon.innerHTML = '<i data-lucide="alert-triangle"></i>';
+            text.textContent = `No errors. ${countLabel(warnings, 'warning')} to review`;
+            if (sub) sub.textContent = 'Warnings do not block publication, but they usually point at real data problems.';
+        } else {
+            indicator.classList.add('state-clean');
+            icon.innerHTML = '<i data-lucide="check-circle"></i>';
+            text.textContent = 'No errors or warnings found';
+            if (sub) sub.textContent = 'This feed passed every check GTFS Guru runs.';
+        }
     }
 
     function showResults(result) {
@@ -1653,6 +1908,8 @@ Download the .zip and drop it here instead; validation still runs locally in you
 
         errorCountEl.innerText = errors;
         warningCountEl.innerText = warnings;
+        renderCompletionIndicator(result);
+        renderResultIssues(result);
         renderMcpPreview(result);
 
         // A shared report has no feed behind it, so there is no HTML report to

@@ -1061,7 +1061,7 @@ impl ShapePoints {
                 let curr_loc = lat_lng(shape);
                 let prev_vec = lat_lng_to_vec(prev_loc);
                 let curr_vec = lat_lng_to_vec(curr_loc);
-                geo_distance += distance_meters_vec(prev_vec, curr_vec).max(0.0);
+                geo_distance += lat_lng_distance_meters(prev_loc, curr_loc).max(0.0);
 
                 segments.push(ShapeSegment {
                     index: idx - 1,
@@ -1626,18 +1626,6 @@ impl Vec3 {
         self.dot(self).sqrt()
     }
 
-    fn normalize(self) -> Self {
-        let norm = self.norm();
-        if norm == 0.0 {
-            return self;
-        }
-        Self {
-            x: self.x / norm,
-            y: self.y / norm,
-            z: self.z / norm,
-        }
-    }
-
     fn scale(self, factor: f64) -> Self {
         Self {
             x: self.x * factor,
@@ -1654,12 +1642,16 @@ impl Vec3 {
         }
     }
 
-    fn neg(self) -> Self {
+    fn sub(self, other: Self) -> Self {
         Self {
-            x: -self.x,
-            y: -self.y,
-            z: -self.z,
+            x: self.x - other.x,
+            y: self.y - other.y,
+            z: self.z - other.z,
         }
+    }
+
+    fn norm2(self) -> f64 {
+        self.dot(self)
     }
 }
 
@@ -1715,14 +1707,31 @@ fn lat_lng_to_vec(point: LatLng) -> Vec3 {
     }
 }
 
+/// `new S2LatLng(S2Point)`: `atan2(z, sqrt(x² + y²))` and `atan2(y, x)` on
+/// the point as given, so reported match coordinates round the same way.
 fn vec_to_lat_lng(point: Vec3) -> LatLng {
-    let normalized = point.normalize();
-    let lat = normalized.z.asin();
-    let lon = normalized.y.atan2(normalized.x);
+    let lat = point
+        .z
+        .atan2((point.x * point.x + point.y * point.y).sqrt());
+    let lon = point.y.atan2(point.x);
     LatLng {
         lat: lat.to_degrees(),
         lon: lon.to_degrees(),
     }
+}
+
+/// `S2LatLng.getDistance` (haversine on lat/lng) times the Earth radius, which
+/// is what `ShapePoints.fromGtfsShape` accumulates along the shape; every
+/// other distance in the matcher goes through the S2Point angle.
+fn lat_lng_distance_meters(a: LatLng, b: LatLng) -> f64 {
+    let lat1 = a.lat.to_radians();
+    let lat2 = b.lat.to_radians();
+    let lng1 = a.lon.to_radians();
+    let lng2 = b.lon.to_radians();
+    let dlat = (0.5 * (lat2 - lat1)).sin();
+    let dlng = (0.5 * (lng2 - lng1)).sin();
+    let x = dlat * dlat + dlng * dlng * lat1.cos() * lat2.cos();
+    2.0 * x.min(1.0).sqrt().asin() * EARTH_RADIUS_METERS
 }
 
 fn angular_distance(a: Vec3, b: Vec3) -> f64 {
@@ -1745,6 +1754,12 @@ fn closest_point_on_segment(point: LatLng, left: LatLng, right: LatLng) -> (LatL
     (res_latlng, dist)
 }
 
+/// `S2EdgeUtil.getClosestPoint(x, a, b)` from s2-geometry 2.0.0, operation
+/// for operation, so near-ties on degenerate shapes (a polyline jittering
+/// between two points centimetres apart) resolve the same way the canonical
+/// validator resolves them. The projection uses `robustCrossProd`, the
+/// on-edge test is two scalar triple products, and the endpoint fallback
+/// compares squared chord distances.
 fn closest_point_on_segment_vec(
     _point: LatLng,
     p: Vec3,
@@ -1753,39 +1768,14 @@ fn closest_point_on_segment_vec(
     right: LatLng,
     b: Vec3,
 ) -> (LatLng, Vec3, f64) {
-    let n = a.cross(b);
-    let n_norm = n.norm();
-    if n_norm == 0.0 {
-        let distance = distance_meters_vec(p, a);
-        return (left, a, distance);
-    }
-    let n_unit = n.scale(1.0 / n_norm);
-    let m = n_unit.cross(p);
-    let m_norm = m.norm();
-    if m_norm == 0.0 {
-        let dist_a = distance_meters_vec(p, a);
-        let dist_b = distance_meters_vec(p, b);
-        return if dist_a <= dist_b {
-            (left, a, dist_a)
-        } else {
-            (right, b, dist_b)
-        };
-    }
-    let mut q = m.cross(n_unit).normalize();
-    if q.dot(p) < 0.0 {
-        q = q.neg();
-    }
-
-    let angle_ab = angular_distance(a, b);
-    let angle_aq = angular_distance(a, q);
-    let angle_qb = angular_distance(q, b);
-    let on_segment = angle_aq + angle_qb <= angle_ab + 1e-12;
-    let closest = if on_segment {
-        q
-    } else if angular_distance(a, p) <= angular_distance(b, p) {
-        a
-    } else {
+    let a_cross_b = s2_robust_cross_prod(a, b);
+    let projected = p.sub(a_cross_b.scale(p.dot(a_cross_b) / a_cross_b.norm2()));
+    let closest = if s2_ccw(a_cross_b, a, projected) && s2_ccw(projected, b, a_cross_b) {
+        s2_normalize(projected)
+    } else if s2_distance2(p, a) > s2_distance2(p, b) {
         b
+    } else {
+        a
     };
 
     let matched = if closest.x == a.x && closest.y == a.y && closest.z == a.z {
@@ -1797,6 +1787,75 @@ fn closest_point_on_segment_vec(
     };
     let distance = distance_meters_vec(p, closest);
     (matched, closest, distance)
+}
+
+/// `S2.robustCrossProd`: `(b + a) x (b - a)`, or `ortho(a)` when that is zero.
+fn s2_robust_cross_prod(a: Vec3, b: Vec3) -> Vec3 {
+    let x = b.add(a).cross(b.sub(a));
+    if x.x == 0.0 && x.y == 0.0 && x.z == 0.0 {
+        s2_ortho(a)
+    } else {
+        x
+    }
+}
+
+/// `S2.ortho`: a unit vector orthogonal to `a`, chosen from a fixed basis by
+/// the largest component of `a`.
+fn s2_ortho(a: Vec3) -> Vec3 {
+    let (ax, ay, az) = (a.x.abs(), a.y.abs(), a.z.abs());
+    let largest = if ax > ay {
+        if ax > az {
+            0
+        } else {
+            2
+        }
+    } else if ay > az {
+        1
+    } else {
+        2
+    };
+    let k = if largest == 0 { 2 } else { largest - 1 };
+    const BASES: [Vec3; 3] = [
+        Vec3 {
+            x: 1.0,
+            y: 0.0053,
+            z: 0.00457,
+        },
+        Vec3 {
+            x: 0.012,
+            y: 1.0,
+            z: 0.00457,
+        },
+        Vec3 {
+            x: 0.012,
+            y: 0.0053,
+            z: 1.0,
+        },
+    ];
+    s2_normalize(a.cross(BASES[k]))
+}
+
+/// `S2EdgeUtil.ccw(a, b, c)` = `scalarTripleProduct(b, c, a) > 0`, that is
+/// `(c x a) . b > 0`, in the same evaluation order.
+fn s2_ccw(a: Vec3, b: Vec3, c: Vec3) -> bool {
+    let (p, u, v) = (b, c, a);
+    (u.y * v.z - u.z * v.y) * p.x + (u.z * v.x - u.x * v.z) * p.y + (u.x * v.y - u.y * v.x) * p.z
+        > 0.0
+}
+
+/// `S2Point.normalize`: multiply by the reciprocal of the norm, not divide.
+fn s2_normalize(p: Vec3) -> Vec3 {
+    let norm = p.norm();
+    let factor = if norm != 0.0 { 1.0 / norm } else { norm };
+    p.scale(factor)
+}
+
+/// `S2Point.getDistance2`: squared chord length.
+fn s2_distance2(x: Vec3, a: Vec3) -> f64 {
+    let dx = x.x - a.x;
+    let dy = x.y - a.y;
+    let dz = x.z - a.z;
+    dx * dx + dy * dy + dz * dz
 }
 
 fn haversine_meters(a: LatLng, b: LatLng) -> f64 {
@@ -1836,6 +1895,102 @@ mod tests {
     use super::*;
     use crate::CsvTable;
     use gtfs_guru_model::{Route, Shape, Stop, StopTime, Trip};
+
+    fn ll(lat: f64, lon: f64) -> LatLng {
+        LatLng { lat, lon }
+    }
+
+    fn closest(stop: LatLng, a: LatLng, b: LatLng) -> (LatLng, f64) {
+        let (matched, _, distance) = closest_point_on_segment_vec(
+            stop,
+            lat_lng_to_vec(stop),
+            a,
+            lat_lng_to_vec(a),
+            b,
+            lat_lng_to_vec(b),
+        );
+        (matched, distance)
+    }
+
+    #[test]
+    fn closest_point_projects_onto_the_edge_interior() {
+        let (matched, distance) = closest(
+            ll(13.7455, 100.5010),
+            ll(13.7450, 100.5000),
+            ll(13.7450, 100.5020),
+        );
+        assert!((matched.lat - 13.7450).abs() < 1e-6, "{matched:?}");
+        assert!((matched.lon - 100.5010).abs() < 1e-6, "{matched:?}");
+        assert!((distance - 55.3).abs() < 1.0, "{distance}");
+    }
+
+    #[test]
+    fn closest_point_falls_back_to_the_nearer_endpoint() {
+        let a = ll(13.7450, 100.5000);
+        let b = ll(13.7450, 100.5020);
+        let (matched, _) = closest(ll(13.7455, 100.4990), a, b);
+        assert_eq!((matched.lat, matched.lon), (a.lat, a.lon));
+        let (matched, _) = closest(ll(13.7455, 100.5030), a, b);
+        assert_eq!((matched.lat, matched.lon), (b.lat, b.lon));
+    }
+
+    /// S2's degenerate case: for a zero-length edge `robustCrossProd` picks an
+    /// arbitrary orthogonal plane and the projection lands on it, so the
+    /// distance is *not* simply the distance to the point. The Thailand
+    /// feed (mdb-1831) has shapes made of repeated points, and match counts
+    /// only agree with the canonical validator when this is reproduced.
+    #[test]
+    fn zero_length_edge_uses_s2_ortho_plane() {
+        let a = ll(13.74509, 100.406097);
+        let stop = ll(13.745090975401045, 100.4061958193779);
+        let (_, distance) = closest(stop, a, a);
+        let to_point = distance_meters_vec(lat_lng_to_vec(stop), lat_lng_to_vec(a));
+        assert!(distance <= to_point, "{distance} vs {to_point}");
+        assert!(distance > 0.0);
+    }
+
+    #[test]
+    fn s2_ortho_is_a_unit_vector_orthogonal_to_its_input() {
+        for v in [
+            Vec3 {
+                x: 1.0,
+                y: 0.1,
+                z: 0.1,
+            },
+            Vec3 {
+                x: 0.1,
+                y: 1.0,
+                z: 0.1,
+            },
+            Vec3 {
+                x: 0.1,
+                y: 0.1,
+                z: 1.0,
+            },
+        ] {
+            let o = s2_ortho(v);
+            assert!(o.dot(v).abs() < 1e-12);
+            assert!((o.norm() - 1.0).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn lat_lng_round_trip_matches_s2latlng() {
+        let p = ll(13.758416000000002, 100.616676);
+        let back = vec_to_lat_lng(lat_lng_to_vec(p));
+        assert!((back.lat - p.lat).abs() < 1e-12);
+        assert!((back.lon - p.lon).abs() < 1e-12);
+    }
+
+    #[test]
+    fn haversine_and_angle_distances_agree_to_the_millimetre() {
+        let a = ll(13.748504971, 100.406097016);
+        let b = ll(13.743773392, 100.406112995);
+        let h = lat_lng_distance_meters(a, b);
+        let g = distance_meters_vec(lat_lng_to_vec(a), lat_lng_to_vec(b));
+        assert!((h - g).abs() < 1e-3, "{h} vs {g}");
+        assert!((h - 526.1).abs() < 1.0, "{h}");
+    }
 
     #[test]
     fn detects_stop_too_far_from_shape() {

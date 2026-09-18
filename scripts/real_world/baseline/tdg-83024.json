@@ -2,7 +2,7 @@
   "feed_id": "tdg-83024",
   "dataset_id": "tdg-83024-202608140131",
   "counts": {
-    "errors": 2,
+    "errors": 0,
     "warnings": 13356,
     "infos": 4982
   },
@@ -25,10 +25,6 @@
     "big_gap_in_service": {
       "severity": "INFO",
       "total": 109
-    },
-    "duplicate_key": {
-      "severity": "ERROR",
-      "total": 2
     },
     "expired_calendar": {
       "severity": "WARNING",
@@ -72,15 +68,15 @@
     }
   },
   "perf": {
-    "wall_seconds": 11.277,
-    "peak_rss_mb": 835.8,
+    "wall_seconds": 3.751,
+    "peak_rss_mb": 765.5,
     "threads": 1,
     "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
   },
   "last_change": {
-    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
-    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "reason": "Dangling booking-rule references are foreign_key_violation without booking_rules.txt (GTF-33); fare_products keyed on its full primary key and MultiPolygon duplicates gated on thorough mode (GTF-34)",
+    "git_sha": "5626fc4870c619cd959cd69297bbe83e846f9a6d",
     "validator_version": "1.0.0",
-    "host_platform": "linux"
+    "host_platform": "darwin"
   }
 }

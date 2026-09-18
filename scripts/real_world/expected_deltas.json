@@ -4,23 +4,13 @@
   "entries": [
     {
       "feed_id": "mdb-3234",
-      "code": "leading_or_trailing_whitespaces",
-      "severity": "WARNING",
-      "java_total": 1,
-      "guru_total": "absent",
-      "triaged": false,
-      "added": "2026-08-14",
-      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru does not report the whitespace this feed carries. Not yet triaged."
-    },
-    {
-      "feed_id": "mdb-3234",
       "code": "missing_pickup_drop_off_booking_rule_id",
       "severity": "WARNING",
       "java_total": "absent",
       "guru_total": 12,
-      "triaged": false,
+      "triaged": true,
       "added": "2026-08-14",
-      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru warns about booking rule ids the canonical validator does not flag on this flex feed. Not yet triaged."
+      "reason": "Triaged 2026-09-15 (GTF-34). stop_times.txt rows 130-135 have pickup_type=2 and drop_off_type=2 with pickup/drop-off windows and no booking rule ids: 6 rows x 2 fields = 12, and the Java rule has the same semantics. Java reports nothing because booking_rules.txt row 7 carries an invalid_url, its loader marks that table UNPARSABLE_ROWS, and every validator injecting the booking rules table is skipped for the whole feed. gtfs.guru does not skip validators on field parse errors. Kept: these are genuine defects Java under-reports."
     },
     {
       "feed_id": "mdb-3234",
@@ -28,29 +18,9 @@
       "severity": "ERROR",
       "java_total": 11,
       "guru_total": 12,
-      "triaged": false,
+      "triaged": true,
       "added": "2026-08-14",
-      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru reports one more occurrence than the canonical validator. Not yet triaged."
-    },
-    {
-      "feed_id": "tdg-81394",
-      "code": "foreign_key_violation",
-      "severity": "ERROR",
-      "java_total": 50631,
-      "guru_total": "absent",
-      "triaged": false,
-      "added": "2026-08-14",
-      "reason": "Pre-existing difference recorded when the real-world harness was introduced, and the largest one in the corpus. This feed populates pickup_booking_rule_id and drop_off_booking_rule_id but ships no booking_rules.txt; the canonical validator reports every reference as a foreign key violation and gtfs.guru reports none. Not yet triaged."
-    },
-    {
-      "feed_id": "tdg-81394",
-      "code": "geo_json_duplicated_element",
-      "severity": "ERROR",
-      "java_total": "absent",
-      "guru_total": 6,
-      "triaged": false,
-      "added": "2026-08-14",
-      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru reports duplicated GeoJSON elements the canonical validator does not. Not yet triaged."
+      "reason": "Triaged 2026-09-15 (GTF-34). The extra occurrence is booking_rules.txt row 7 (booking_rule_000006): booking_type=1 and an empty prior_notice_duration_min, exactly like the eleven rows both validators report. Java drops the row before validation because its info_url fails to parse (the feed's single invalid_url, reported by both validators), so BookingRulesEntityValidator never sees it. gtfs.guru keeps rows with field-level parse errors. Kept: the notice is correct on the data."
     },
     {
       "feed_id": "mdb-502",
@@ -58,19 +28,9 @@
       "severity": "WARNING",
       "java_total": "absent",
       "guru_total": 5,
-      "triaged": false,
+      "triaged": true,
       "added": "2026-08-14",
-      "reason": "Pre-existing difference recorded when the real-world harness was introduced. Not yet triaged."
-    },
-    {
-      "feed_id": "tdg-83024",
-      "code": "duplicate_key",
-      "severity": "ERROR",
-      "java_total": "absent",
-      "guru_total": 2,
-      "triaged": false,
-      "added": "2026-08-14",
-      "reason": "Pre-existing difference recorded when the real-world harness was introduced. gtfs.guru reports two duplicate keys the canonical validator does not. Not yet triaged."
+      "reason": "Triaged 2026-09-15 (GTF-34). calendar.txt rows 12, 25, 29, 41 and 43 (service_ids 17, 47, 53, 340, 343) have every weekday set to 0 and no calendar_dates.txt additions, so the services never run. service_never_active has no canonical equivalent and is already an acknowledged addition in spec_baseline.json and spec_changes.json. Kept."
     }
   ]
 }

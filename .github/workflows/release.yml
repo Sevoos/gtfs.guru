@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - 'v*'
+      # The floating major tag the GitHub Action is published under
+      # (`git tag -f v1 vX.Y.Z`) is not a release.
+      - '!v[0-9]'
+      - '!v[0-9][0-9]'
   workflow_dispatch:
     inputs:
       version:
@@ -281,6 +285,10 @@ jobs:
       contents: write
     
     steps:
+      # The release note header is composed from the checked-out spec baseline,
+      # so this job needs the repository, not only the build artifacts.
+      - uses: actions/checkout@v7
+
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
@@ -660,97 +668,3 @@ jobs:
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  deploy-website:
-    needs: [publish-crates, publish-pypi, publish-npm]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Verify deployment configuration
-        env:
-          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
-          HETZNER_KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
-          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          for name in HETZNER_HOST HETZNER_KNOWN_HOSTS HETZNER_SSH_KEY; do
-            if [ -z "${!name}" ]; then
-              echo "Missing required release secret: $name" >&2
-              exit 1
-            fi
-          done
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - uses: ./.github/actions/install-wasm-pack
-
-      - name: Install binaryen
-        env:
-          BINARYEN_SHA256: b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db
-          BINARYEN_VERSION: '131'
-        run: |
-          archive="$RUNNER_TEMP/binaryen.tar.gz"
-          curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" -o "$archive"
-          echo "$BINARYEN_SHA256  $archive" | sha256sum -c -
-          tar -xzf "$archive" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
-
-      - name: Build production website assets
-        run: ./scripts/build-wasm.sh
-
-      - name: Synchronize website to Hetzner
-        env:
-          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
-          HETZNER_KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
-          HETZNER_PATH: ${{ secrets.HETZNER_PATH }}
-          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
-          HETZNER_USER: ${{ secrets.HETZNER_USER }}
-        run: |
-          set -euo pipefail
-          install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$HETZNER_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-          install -m 600 /dev/null "$RUNNER_TEMP/hetzner_deploy_key"
-          printf '%s\n' "$HETZNER_SSH_KEY" > "$RUNNER_TEMP/hetzner_deploy_key"
-          trap 'rm -f "$RUNNER_TEMP/hetzner_deploy_key"' EXIT
-
-          DEPLOY_USER="${HETZNER_USER:-botuser}"
-          DEPLOY_PATH="${HETZNER_PATH:-gtfs-guru-web/}"
-          rsync -az --delete-delay --delete-excluded \
-            --exclude Dockerfile \
-            --exclude nginx.conf \
-            -e "ssh -i $RUNNER_TEMP/hetzner_deploy_key -o IdentitiesOnly=yes" \
-            website/ "$DEPLOY_USER@$HETZNER_HOST:$DEPLOY_PATH"
-
-      - name: Verify deployed website version
-        env:
-          EXPECTED_VERSION: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          EXPECTED_VERSION="${EXPECTED_VERSION#v}"
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
-            https://gtfs.guru/pkg/package.json > "$RUNNER_TEMP/package.json"
-          DEPLOYED_VERSION=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$RUNNER_TEMP/package.json")
-          test "$DEPLOYED_VERSION" = "$EXPECTED_VERSION" || {
-            echo "Website reports $DEPLOYED_VERSION, expected $EXPECTED_VERSION" >&2
-            exit 1
-          }
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-
-      - name: Install browser smoke-test dependencies
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-
-      - name: Exercise the deployed website
-        env:
-          EXPECTED_VERSION: ${{ github.ref_name }}
-          GTFS_GURU_SITE_URL: https://gtfs.guru
-        run: npm run test:live-website

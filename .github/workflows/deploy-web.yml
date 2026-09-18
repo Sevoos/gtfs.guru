@@ -1,0 +1,153 @@
+name: Deploy Web
+
+# Publishes gtfs.guru. Runs when the web-facing sources change on main, or on
+# demand. Deliberately not tied to a version or a tag: the site is the axum
+# service in crates/gtfs_validator_web with website/ embedded, and it ships
+# whenever those change.
+#
+# Production is a plain `docker run` container behind Caddy on the Hetzner box
+# (see docs/MAINTENANCE.md). The image is built here, streamed to the host over
+# ssh (no registry, no extra credentials), and swapped in by
+# deploy/swap-web-container.sh, which keeps the live container's ports, env and
+# volumes and rolls back if the new one does not come up.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'crates/gtfs_validator_web/**'
+      - 'crates/gtfs_validator_wasm/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'deploy/swap-web-container.sh'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+env:
+  IMAGE_REPO: gtfs-validator-web
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify deployment configuration
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for name in HETZNER_HOST HETZNER_KNOWN_HOSTS HETZNER_SSH_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required deploy secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_REPO }}:${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check the image reports its commit
+        run: |
+          set -euo pipefail
+          cid=$(docker run --detach --publish 127.0.0.1:3000:3000 "$IMAGE_REPO:$GITHUB_SHA")
+          trap 'docker rm -f "$cid" >/dev/null' EXIT
+          for _ in $(seq 1 30); do
+            if out=$(curl -sf http://127.0.0.1:3000/version); then
+              echo "$out"
+              echo "$out" | grep -q "\"commit\":\"$GITHUB_SHA\"" && exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::/version never reported commit $GITHUB_SHA"
+          docker logs "$cid"
+          exit 1
+
+      - name: Prepare ssh
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+          HETZNER_KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$HETZNER_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          install -m 600 /dev/null "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$HETZNER_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          cat > "$HOME/.ssh/config" <<EOF
+          Host deploy-target
+            HostName $HETZNER_HOST
+            User ${HETZNER_USER:-botuser}
+            IdentityFile $HOME/.ssh/deploy_key
+            IdentitiesOnly yes
+            ServerAliveInterval 30
+          EOF
+          chmod 600 "$HOME/.ssh/config"
+
+      - name: Ship the image to the server
+        run: |
+          set -euo pipefail
+          docker save "$IMAGE_REPO:$GITHUB_SHA" | zstd -T0 -3 \
+            | ssh deploy-target 'zstd -d | docker load'
+
+      - name: Swap the live container
+        run: |
+          set -euo pipefail
+          ssh deploy-target "bash -s -- '$IMAGE_REPO:$GITHUB_SHA' '$GITHUB_SHA'" \
+            < deploy/swap-web-container.sh
+
+      - name: Verify the live site runs this commit
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if out=$(curl -sf --max-time 10 "https://gtfs.guru/version?deploy=$GITHUB_SHA"); then
+              echo "$out"
+              echo "$out" | grep -q "\"commit\":\"$GITHUB_SHA\"" && exit 0
+            fi
+            echo "Not there yet (attempt $attempt/6); waiting 10s..."
+            sleep 10
+          done
+          echo "::error::gtfs.guru/version does not report commit $GITHUB_SHA"
+          exit 1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Install browser smoke-test dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Exercise the deployed website
+        env:
+          GTFS_GURU_SITE_URL: https://gtfs.guru
+        run: npm run test:live-website
+
+      - name: Remove the deploy key
+        if: always()
+        run: rm -f "$HOME/.ssh/deploy_key"

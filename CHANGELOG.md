@@ -7,48 +7,7 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-
-- A public compatibility page at <https://gtfs.guru/compatibility/>, generated and
-  committed alongside the notice pages. It names the GTFS specification revision
-  and the canonical validator release this build answers for, lists what changed
-  upstream recently with a support status and a source for each, maps all 191
-  notice codes to their canonical rule (or marks them as GTFS Guru additions or
-  as deprecated upstream), states every accepted difference, and shows the
-  per-file column coverage. Linked from every website page's footer, from the
-  home page, from the documentation, and from the release notes.
-- `crates/gtfs_validator_core/spec_changes.json`: the curated, versioned record
-  of recent upstream changes and this build's support status for each, with
-  `gtfs_guru_core::validate_spec_changes` checking every claim against the
-  build's own spec surface and the baseline's accepted differences. A claim the
-  build does not satisfy fails `cargo test`.
-- Two CI gates against stale or self-contradictory metadata: `cargo run -p
-  gtfs-guru-web --bin generate-notice-pages -- --check` now runs on every Rust
-  CI build, so committed generated pages cannot fall behind the code; and
-  `scripts/spec_watch.py check-coordination` fails a pull request that moves the
-  baseline without moving the change log the page is built from.
-- Spec Watch: a weekly CI run that compares the GTFS specification
-  (`google/transit`) and the canonical validator's published rules against what
-  this build supports, and opens or updates a single Linear issue when the two
-  drift apart. It stays silent when nothing drifted. The accepted upstream state
-  lives in `crates/gtfs_validator_core/spec_baseline.json`;
-  `docs/spec-watch.md` documents the workflow and the protocol for moving it.
-- `gtfs-guru spec-surface` emits the files, fields, enum domains, and notice
-  codes this build supports as JSON, derived from the same tables validation
-  uses.
-- Every JSON report's `summary` now carries `specRevision` and
-  `canonicalBaseline`, so a stored report states which specification revision and
-  canonical validator release it was produced against.
-
-### Fixed
-
-- The demo feed archive is stored rather than deflated, so
-  `scripts/build_demo_feed.py --check` agrees with the committed copy on every
-  machine. Deflate output is only stable for a given zlib implementation, so a
-  contributor whose Python links zlib-ng saw the committed archive as stale and a
-  rebuild produced a diff CI rejected. The archive's contents are unchanged.
-
-## [1.0.0] - 2026-07-28
+## [1.0.0] - 2026-09-15
 
 First stable release. The CLI, core, model, report, profile, MCP, web, WASM,
 Python, and desktop crates share the 1.0.0 version and their public APIs are
@@ -136,6 +95,42 @@ now covered by semantic versioning.
 - A pre-publish Python wheel smoke test covering the synchronous and
   asynchronous APIs, progress callbacks, notice conversion, and report export.
 - A security policy and operator guidance.
+- A public compatibility page at <https://gtfs.guru/compatibility/>, generated and
+  committed alongside the notice pages. It names the GTFS specification revision
+  and the canonical validator release this build answers for, lists what changed
+  upstream recently with a support status and a source for each, maps all 191
+  notice codes to their canonical rule (or marks them as GTFS Guru additions or
+  as deprecated upstream), states every accepted difference, and shows the
+  per-file column coverage. Linked from every website page's footer, from the
+  home page, from the documentation, and from the release notes.
+- `crates/gtfs_validator_core/spec_changes.json`: the curated, versioned record
+  of recent upstream changes and this build's support status for each, with
+  `gtfs_guru_core::validate_spec_changes` checking every claim against the
+  build's own spec surface and the baseline's accepted differences. A claim the
+  build does not satisfy fails `cargo test`.
+- Two CI gates against stale or self-contradictory metadata: `cargo run -p
+  gtfs-guru-web --bin generate-notice-pages -- --check` now runs on every Rust
+  CI build, so committed generated pages cannot fall behind the code; and
+  `scripts/spec_watch.py check-coordination` fails a pull request that moves the
+  baseline without moving the change log the page is built from.
+- Spec Watch: a weekly CI run that compares the GTFS specification
+  (`google/transit`) and the canonical validator's published rules against what
+  this build supports, and opens or updates a single Linear issue when the two
+  drift apart. It stays silent when nothing drifted. The accepted upstream state
+  lives in `crates/gtfs_validator_core/spec_baseline.json`;
+  `docs/spec-watch.md` documents the workflow and the protocol for moving it.
+- `gtfs-guru spec-surface` emits the files, fields, enum domains, and notice
+  codes this build supports as JSON, derived from the same tables validation
+  uses.
+- Every JSON report's `summary` now carries `specRevision` and
+  `canonicalBaseline`, so a stored report states which specification revision and
+  canonical validator release it was produced against.
+
+- `scripts/mdb_parity.py`: the mdb-50 catalogue parity check. Fifty
+  MobilityDatabase feeds pinned in `scripts/real_world/mdb50.json`, both
+  validators on the same zips, a per-feed diff classified against
+  `expected_deltas.json` and `mdb50_expected_deltas.json`. 46 of 50 feeds are
+  exact and 50 of 50 exact-on-shared; see `docs/real-world-parity.md`.
 
 ### Changed
 
@@ -233,6 +228,60 @@ now covered by semantic versioning.
   longer publish wheels carrying the previous version.
 - Updated `anyhow`, `bytes`, `crossbeam-epoch`, `plist`/`quick-xml`,
   `quinn-proto`, `rustls-webpki`, `tar`, `time`, and `wayland-scanner`.
+- `stop_times.txt` references to `pickup_booking_rule_id` and
+  `drop_off_booking_rule_id` are now checked when `booking_rules.txt` is
+  absent, so every such reference is a `foreign_key_violation`, as the
+  canonical validator reports. The check used to be skipped entirely without
+  the file, which hid 50,631 dangling references on one real-world feed
+  (GTF-33).
+- `fare_products.txt` rows are keyed on the specification's primary key,
+  `(fare_product_id, rider_category_id, fare_media_id)`, so a product sold to
+  several rider categories is no longer a `duplicate_key`. Thorough mode keeps
+  the stricter globally unique `fare_product_id` (GTF-34).
+- `geo_json_duplicated_element` for repeated MultiPolygon geometries is now
+  reported only under `--thorough`, matching the Polygon case. The canonical
+  validator uses that code for duplicated JSON keys, so the default profile
+  no longer emits it for geometry (GTF-34).
+- The four remaining real-world parity differences on `mdb-3234` and
+  `mdb-502` are recorded as reviewed in `scripts/real_world/expected_deltas.json`
+  with the evidence for keeping each one (GTF-34, GTF-35).
+- The demo feed archive is stored rather than deflated, so
+  `scripts/build_demo_feed.py --check` agrees with the committed copy on every
+  machine. Deflate output is only stable for a given zlib implementation, so a
+  contributor whose Python links zlib-ng saw the committed archive as stale and a
+  rebuild produced a diff CI rejected. The archive's contents are unchanged.
+- `block_trips_with_overlapping_stop_times` now follows the canonical
+  validator step for step: a trip's interval is its first and last stop_time
+  by `stop_sequence` (both need arrival and departure), a pair whose boundary
+  stop repeats the same arrival/departure is a block transfer and not an
+  overlap, and two trips only overlap on a date both services are active on,
+  with no shortcut for identical `service_id`s. `intersection` is that first
+  shared date (`YYYYMMDD`) instead of a time range. Hyderabad (mdb-2457) loses
+  793 false errors and SNCB (mdb-686) 177.
+- `non_ascii_or_non_printable_char` no longer fires on the `_id` fields the
+  canonical validator does not type as IDs: `frequencies.trip_id`,
+  `translations.record_id` / `record_sub_id`, `timeframes.service_id`,
+  `location_group_stops.location_group_id` / `stop_id`,
+  `booking_rules.prior_notice_service_id` and `trips.direction_id`.
+- The CSV reader applies univocity's field boundaries before parsing (GTF-35):
+  whitespace around a bare field is dropped, a quote after that whitespace
+  still opens the field, whitespace inside quotes is kept. `817, "DUS"` is now
+  the value `DUS`, not `"DUS"` (Latvia, mdb-992: 28 false
+  `mixed_case_recommended_field`), and `leading_or_trailing_whitespaces` is
+  reported in default mode exactly when the canonical validator reports it,
+  so it no longer needs `--thorough`.
+- `mixed_case_recommended_field` tokenises like Java's `[^\p{L}]+`: combining
+  vowel signs and tone marks (Thai, Lao, Indic scripts) split a word into
+  several caseless tokens, lengths count UTF-16 units, and the notice is held
+  back on rows whose fields failed to parse, as Java's entity validators never
+  see those rows.
+- Shape-to-stop matching uses an operation-for-operation port of
+  `S2EdgeUtil.getClosestPoint`, `S2LatLng` and `S2LatLng.getDistance`, so
+  near-ties on degenerate shapes (a polyline jittering between two points
+  centimetres apart, or repeated points) resolve the way the canonical
+  validator resolves them. Thailand (mdb-1831) `stop_has_too_many_matches_for_shape`
+  goes from 57 to Java's 63 and `stops_match_shape_out_of_order` from 75 to 71
+  against 72; the last pair differs in the final ulp of a trig call.
 
 ## [0.9.4] - 2026-02-05
 

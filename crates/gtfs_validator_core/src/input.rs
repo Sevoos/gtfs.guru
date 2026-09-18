@@ -161,10 +161,18 @@ pub fn collect_input_notices(input: &GtfsInput) -> Result<Vec<ValidationNotice>,
     Ok(notices)
 }
 
+/// CSV bytes as the parser should see them: univocity field boundaries
+/// (see `csv_univocity`), then UTF-8 with invalid sequences replaced.
 fn decode_utf8_lossy(data: &[u8]) -> Cow<'_, str> {
-    match std::str::from_utf8(data) {
-        Ok(text) => Cow::Borrowed(text),
-        Err(_) => Cow::Owned(String::from_utf8_lossy(data).into_owned()),
+    match crate::csv_univocity::normalize(data) {
+        Cow::Borrowed(bytes) => match std::str::from_utf8(bytes) {
+            Ok(text) => Cow::Borrowed(text),
+            Err(_) => Cow::Owned(String::from_utf8_lossy(bytes).into_owned()),
+        },
+        Cow::Owned(bytes) => Cow::Owned(match String::from_utf8(bytes) {
+            Ok(text) => text,
+            Err(err) => String::from_utf8_lossy(err.as_bytes()).into_owned(),
+        }),
     }
 }
 
@@ -548,6 +556,7 @@ impl GtfsInputReader {
                     }
                 })?;
 
+                let buf_reader = crate::csv_univocity::NormalizingReader::new(buf_reader);
                 let mut csv_reader = csv::ReaderBuilder::new()
                     .has_headers(true)
                     .flexible(true)
@@ -1649,7 +1658,9 @@ impl GtfsBytesReader {
             .has_headers(true)
             .flexible(true)
             .trim(csv::Trim::Headers)
-            .from_reader(zipped.take(HEADER_SCAN_BYTES + 1));
+            .from_reader(crate::csv_univocity::NormalizingReader::new(
+                zipped.take(HEADER_SCAN_BYTES + 1),
+            ));
         let headers_record = header_reader
             .headers()
             .map_err(|err| {
@@ -1661,7 +1672,7 @@ impl GtfsBytesReader {
         // record was cut mid-field, and the second pass would then read a longer
         // header than the `RowValidator` was built from -- so refuse instead of
         // validating against a header we know is wrong.
-        if header_reader.into_inner().limit() == 0 {
+        if header_reader.into_inner().into_inner().limit() == 0 {
             return Err(GtfsInputError::ZipFileIo {
                 path: PathBuf::from("<memory>"),
                 file: file_name.to_string(),
@@ -1706,6 +1717,7 @@ impl GtfsBytesReader {
         // The parser flattens our `io::Error` into a message string, so the
         // reason is read back off the reader's own flag instead.
         let limit_flag = capped.limit_flag();
+        let capped = crate::csv_univocity::NormalizingReader::new(capped);
         let (table, errors, row_notices) =
             read_csv_from_reader_with_validation(capped, file_name, |record, line| {
                 if has_header_errors {

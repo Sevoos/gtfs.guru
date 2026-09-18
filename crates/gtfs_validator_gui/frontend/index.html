@@ -1784,7 +1784,7 @@
                     }
 
                     L.marker([err.stopLat, err.stopLon], { icon: stopIcon })
-                        .bindPopup('<b>' + (err.stopName || 'Stop') + '</b>')
+                        .bindPopup('<b>' + escapeHtml(err.stopName || 'Stop') + '</b>')
                         .addTo(errorMap);
                     L.marker([err.matchLat, err.matchLon], { icon: matchIcon })
                         .bindPopup('<b>Closest point on shape</b>')

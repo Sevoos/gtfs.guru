@@ -206,6 +206,34 @@ per-feed error and warning deltas, every notice code that changed, and the
 recorded reason for each change. The `full` CI job writes it to the job summary
 and uploads it as an artifact.
 
+## The mdb-50 catalogue check
+
+The corpus is the per-change gate. Before a release the same question is asked
+on a wider set: fifty MobilityDatabase feeds chosen to cover countries,
+features and sizes the corpus does not (`scripts/real_world/mdb50.json`). The
+harness runs both validators on the same zips with the same date and country
+code and diffs notice codes and totals per feed:
+
+```bash
+python3 scripts/mdb_parity.py fetch            # latest.zip for every manifest feed
+python3 scripts/mdb_parity.py run              # guru and java, ~2 minutes
+python3 scripts/mdb_parity.py compare          # writes benchmark-feeds/mdb-50/parity/comparison.json
+```
+
+`compare` classifies every difference the way the gate does. It loads
+`expected_deltas.json` first (the two feeds shared with the corpus are approved
+there) and then `mdb50_expected_deltas.json`, and exits 2 while any difference
+is unexplained. A feed is *exact* when the fingerprints are identical and
+*exact-on-shared* when every difference has an approval; the release target is
+50/50 exact-on-shared. An approval whose pinned totals no longer match is
+reported as stale rather than silently dropped.
+
+The zips are `latest.zip` snapshots, not immutable dataset ids, so the manifest
+records the sha256 each approval was triaged against and `run` prints a note
+(never a failure) when a local zip differs. `run --tools guru` reuses Java
+output from an earlier run, which is how a validator change is checked without
+waiting for the JVM.
+
 ## Files
 
 | Path | Purpose |
@@ -214,6 +242,9 @@ and uploads it as an artifact.
 | `scripts/real_world/gate.json` | Java baseline pin, timeouts, perf thresholds, gate weights |
 | `scripts/real_world/expected_deltas.json` | Approved gtfs.guru vs Java differences |
 | `scripts/real_world/baseline/*.json` | Per-feed committed notice fingerprint and counts |
+| `scripts/real_world/mdb50.json` | The fifty catalogue feeds: id, provider, country, why chosen, snapshot sha256 |
+| `scripts/real_world/mdb50_expected_deltas.json` | Approved differences on the catalogue set, same format |
+| `scripts/mdb_parity.py` | `fetch`, `run`, `compare` on the catalogue set |
 | `scripts/real_world_corpus.py` | `fetch`, `verify`, `check-updates`, `resolve`, `describe` |
 | `scripts/real_world_parity.py` | `jar`, `run`, `gate`, `report`, `update-baseline`, `impact` |
 | `scripts/ci_real_world.sh` | The wrapper CI runs |

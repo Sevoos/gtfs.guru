@@ -3,7 +3,7 @@
   "dataset_id": "mdb-3234-202606301640",
   "counts": {
     "errors": 13,
-    "warnings": 335,
+    "warnings": 336,
     "infos": 90
   },
   "features": [
@@ -25,6 +25,10 @@
     },
     "invalid_url": {
       "severity": "ERROR",
+      "total": 1
+    },
+    "leading_or_trailing_whitespaces": {
+      "severity": "WARNING",
       "total": 1
     },
     "missing_pickup_drop_off_booking_rule_id": {
@@ -61,15 +65,15 @@
     }
   },
   "perf": {
-    "wall_seconds": 0.044,
-    "peak_rss_mb": 25.1,
+    "wall_seconds": 0.017,
+    "peak_rss_mb": 13.8,
     "threads": 1,
     "note": "Recorded on one machine; thresholds in gate.json are deliberately loose because CI hardware varies."
   },
   "last_change": {
-    "reason": "Initial baseline: real-world corpus harness introduced (12 pinned MobilityData datasets, gtfs.guru single-threaded, per-feed pinned validation date and country code).",
-    "git_sha": "af1a5ca1722a481153ef32c32da5c29fd3e0b333",
+    "reason": "GTF-35: the CSV reader now applies univocity field boundaries before parsing, so leading_or_trailing_whitespaces is reported in default mode exactly when the canonical validator reports it (whitespace inside quotes). booking_rules.txt row 9 booking_url, the one Java reports, is now reported too.",
+    "git_sha": "360230e6f851812cdf23a2e6e73e5ebc4febbbdd",
     "validator_version": "1.0.0",
-    "host_platform": "linux"
+    "host_platform": "darwin"
   }
 }

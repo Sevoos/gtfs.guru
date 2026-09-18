@@ -182,22 +182,27 @@ impl Validator for DuplicateKeyValidator {
             }
         }
 
-        // Fare products: fare_product_id
+        // Fare products: (fare_product_id, rider_category_id, fare_media_id)
+        //
+        // The specification's primary key for fare_products.txt is the triple,
+        // and the canonical validator keys on the same triple. A product sold
+        // to several rider categories, or on several media, repeats its id on
+        // purpose. Thorough mode keeps the stricter reading of a globally
+        // unique fare_product_id.
         if let Some(ref fare_products) = feed.fare_products {
-            let mut seen: HashMap<(StringId, StringId), u64> = HashMap::new();
+            let mut seen: HashMap<(StringId, StringId, StringId), u64> = HashMap::new();
             for (index, row) in fare_products.rows.iter().enumerate() {
                 let row_number = fare_products.row_number(index);
                 let id = row.fare_product_id;
                 if id.0 != 0 {
-                    let media_id = row.fare_media_id.unwrap_or(StringId(0));
-                    // In strict mode (thorough), fare_product_id must be unique globally.
-                    // In compatibility mode (Java), it seems they might allow duplicates if fare_media_id differs
-                    // or simply don't enforce strictly. MBTA feed has duplicates with different media.
-                    // We will use composite key in non-thorough mode if media_id is present.
-                    let key = if !thorough_mode_enabled() && media_id.0 != 0 {
-                        (id, media_id)
+                    let key = if thorough_mode_enabled() {
+                        (id, StringId(0), StringId(0))
                     } else {
-                        (id, StringId(0))
+                        (
+                            id,
+                            row.rider_category_id.unwrap_or(StringId(0)),
+                            row.fare_media_id.unwrap_or(StringId(0)),
+                        )
                     };
 
                     if let Some(prev_row) = seen.get(&key) {
@@ -468,7 +473,7 @@ fn duplicate_key_notice(
 mod tests {
     use super::*;
     use crate::CsvTable;
-    use gtfs_guru_model::{Route, RouteType, Stop, Trip};
+    use gtfs_guru_model::{FareProduct, Route, RouteType, Stop, Trip};
 
     #[test]
     fn detects_duplicate_stop_id() {
@@ -519,6 +524,69 @@ mod tests {
                 .as_u64()
                 .unwrap(),
             2
+        );
+    }
+
+    #[test]
+    fn fare_product_repeated_per_rider_category_is_not_a_duplicate() {
+        let mut feed = GtfsFeed::default();
+        let product = feed.pool.intern("TBM_20314");
+        let media = feed.pool.intern("TBM_carte");
+        let student = feed.pool.intern("TBM_etudiant");
+        let pupil = feed.pool.intern("TBM_sco16");
+        feed.fare_products = Some(CsvTable {
+            headers: vec![
+                "fare_product_id".into(),
+                "fare_media_id".into(),
+                "rider_category_id".into(),
+            ],
+            rows: vec![
+                FareProduct {
+                    fare_product_id: product,
+                    fare_media_id: Some(media),
+                    rider_category_id: Some(student),
+                    ..Default::default()
+                },
+                FareProduct {
+                    fare_product_id: product,
+                    fare_media_id: Some(media),
+                    rider_category_id: Some(pupil),
+                    ..Default::default()
+                },
+                // The same triple again: this one is a duplicate.
+                FareProduct {
+                    fare_product_id: product,
+                    fare_media_id: Some(media),
+                    rider_category_id: Some(pupil),
+                    ..Default::default()
+                },
+            ],
+            row_numbers: vec![2, 3, 4],
+        });
+
+        let mut notices = NoticeContainer::new();
+        DuplicateKeyValidator.validate(&feed, &mut notices);
+
+        assert_eq!(notices.len(), 1);
+        let notice = notices.iter().next().unwrap();
+        assert_eq!(notice.code, CODE_DUPLICATE_KEY);
+        assert_eq!(
+            notice
+                .context
+                .get("oldCsvRowNumber")
+                .unwrap()
+                .as_u64()
+                .unwrap(),
+            3
+        );
+        assert_eq!(
+            notice
+                .context
+                .get("newCsvRowNumber")
+                .unwrap()
+                .as_u64()
+                .unwrap(),
+            4
         );
     }
 

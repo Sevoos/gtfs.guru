@@ -298,7 +298,7 @@ guarded against stale input, and the complete output is validated again.
 
 - The input is never modified. Without `--fix-output` the copy lands at
   `<input>.fixed.<ext>`; an existing output path is refused rather than
-  overwritten.
+  overwritten, as is an output path inside the input feed directory.
 - `--fix` applies safe fixes only; `--fix-unsafe` also applies confirm-level and
   unsafe ones.
 - Field edits rewrite only their records. Sorting moves the original raw

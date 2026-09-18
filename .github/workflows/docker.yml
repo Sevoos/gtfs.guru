@@ -2,7 +2,10 @@ name: Build and Push Docker Image
 
 on:
   push:
-    tags: ['v*']  # Only build on version tags, not every push
+    tags:
+      - 'v*'  # Only build on version tags, not every push
+      - '!v[0-9]'  # not the floating major tag of the GitHub Action
+      - '!v[0-9][0-9]'
 
 env:
   REGISTRY: ghcr.io

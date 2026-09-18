@@ -25,6 +25,7 @@
 
 pub mod csv_reader;
 mod csv_schema;
+pub mod csv_univocity;
 mod csv_validation;
 pub mod diff;
 pub mod engine;

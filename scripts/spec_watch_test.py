@@ -478,6 +478,7 @@ class RealtimeBaselineCase(unittest.TestCase):
     """
 
     SCHEMA = b'syntax = "proto2";\npackage transit_realtime;\n'
+    COMPATIBILITY_SCHEMA = b'syntax = "proto2";\npackage transit_realtime_legacy;\n'
     PINNED_AT = "2026-08-17T19:50:33Z"
 
     def setUp(self) -> None:
@@ -487,6 +488,11 @@ class RealtimeBaselineCase(unittest.TestCase):
         self.schema_path = self.workdir / "proto" / "gtfs-realtime.proto"
         self.schema_path.parent.mkdir(parents=True)
         self.schema_path.write_bytes(self.SCHEMA)
+        self.compatibility_schema_path = (
+            self.workdir / "proto" / "java-0.0.4" / "gtfs-realtime.proto"
+        )
+        self.compatibility_schema_path.parent.mkdir(parents=True)
+        self.compatibility_schema_path.write_bytes(self.COMPATIBILITY_SCHEMA)
 
         self.baseline_path = self.workdir / "spec_baseline.json"
         self.write_baseline(
@@ -513,6 +519,11 @@ class RealtimeBaselineCase(unittest.TestCase):
                         "path": "proto/gtfs-realtime.proto",
                         "sha256": sha256,
                         "sizeBytes": size,
+                    },
+                    "canonicalBindingsSchema": {
+                        "path": "proto/java-0.0.4/gtfs-realtime.proto",
+                        "sha256": hashlib.sha256(self.COMPATIBILITY_SCHEMA).hexdigest(),
+                        "sizeBytes": len(self.COMPATIBILITY_SCHEMA),
                     },
                 }
             ),
@@ -569,6 +580,17 @@ class RealtimeBaselineCase(unittest.TestCase):
 
         self.assertEqual(result.returncode, 3, result.stdout)
         self.assertIn("missing", result.stdout)
+
+    def test_edited_java_compatibility_schema_is_caught(self) -> None:
+        self.compatibility_schema_path.write_bytes(
+            self.COMPATIBILITY_SCHEMA + b"// a local edit\n"
+        )
+
+        result = self.check_rt()
+
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertIn("Java compatibility schema", result.stdout)
+        self.assertIn("has been edited", result.stdout)
 
     def test_a_newer_upstream_commit_is_drift(self) -> None:
         self.write_heads(

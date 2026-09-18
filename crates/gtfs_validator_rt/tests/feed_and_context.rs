@@ -64,15 +64,16 @@ fn records_size_and_source() {
     let bytes = encode(vec![entity("a")]);
     let feed = RtFeed::from_bytes(&bytes, RtSource::Bytes).expect("decodes");
 
-    assert_eq!(feed.encoded_len, bytes.len());
-    assert_eq!(feed.source, RtSource::Bytes);
+    assert_eq!(feed.encoded_len(), bytes.len());
+    assert_eq!(feed.source(), &RtSource::Bytes);
     assert_eq!(feed.entities().len(), 1);
 }
 
 /// The fingerprint covers the bytes as received, so it separates snapshots that
 /// the decoded value cannot. Here the two inputs differ only in an unknown
-/// field, which `prost` drops: the decoded messages are equal, the fingerprints
-/// are not. Hashing a re-encoding would have called these the same snapshot.
+/// field, which the compatibility boundary drops: the decoded messages are
+/// equal, the fingerprints are not. Hashing a re-encoding would have called
+/// these the same snapshot.
 #[test]
 fn fingerprint_distinguishes_what_decoding_discards() {
     let plain = encode(vec![entity("a")]);
@@ -83,13 +84,14 @@ fn fingerprint_distinguishes_what_decoding_discards() {
     let first = RtFeed::from_bytes(&plain, RtSource::Bytes).expect("decodes");
     let second = RtFeed::from_bytes(&with_unknown, RtSource::Bytes).expect("decodes");
 
-    assert_eq!(first.message, second.message, "decoded values agree");
+    assert_eq!(first.message(), second.message(), "decoded values agree");
     assert_ne!(
-        first.content_fingerprint, second.content_fingerprint,
+        first.content_fingerprint(),
+        second.content_fingerprint(),
         "but the received bytes did not"
     );
     assert_eq!(
-        second.message.encode_to_vec().len(),
+        second.message().encode_to_vec().len(),
         plain.len(),
         "the unknown field is gone after a round trip"
     );
@@ -101,14 +103,14 @@ fn fingerprint_is_stable_and_hex_rendered() {
     let first = RtFeed::from_bytes(&bytes, RtSource::Bytes).expect("decodes");
     let second = RtFeed::from_bytes(&bytes, RtSource::Bytes).expect("decodes");
 
-    assert_eq!(first.content_fingerprint, second.content_fingerprint);
+    assert_eq!(first.content_fingerprint(), second.content_fingerprint());
     assert_eq!(
-        first.content_fingerprint,
+        first.content_fingerprint(),
         ContentFingerprint::of(&bytes),
         "computed over the raw input"
     );
 
-    let rendered = first.content_fingerprint.to_string();
+    let rendered = first.content_fingerprint().to_string();
     assert_eq!(rendered.len(), 64);
     assert!(rendered
         .chars()
@@ -137,7 +139,22 @@ fn truncated_input_is_a_decode_error_not_a_notice() {
     let error = RtFeed::from_bytes(&bytes[..bytes.len() - 2], RtSource::Bytes)
         .expect_err("truncated input fails");
 
-    assert!(matches!(error, RtFeedError::Decode(_)), "got {error:?}");
+    match error {
+        RtFeedError::Decode {
+            input,
+            encoded_len,
+            content_fingerprint,
+            ..
+        } => {
+            assert_eq!(input, RtSource::Bytes);
+            assert_eq!(encoded_len, bytes.len() - 2);
+            assert_eq!(
+                content_fingerprint,
+                ContentFingerprint::of(&bytes[..bytes.len() - 2])
+            );
+        }
+        other => panic!("expected Decode, got {other:?}"),
+    }
 }
 
 #[test]
@@ -149,8 +166,8 @@ fn reads_a_local_file_and_records_its_path() {
     std::fs::write(&path, &bytes).expect("write fixture");
 
     let feed = RtFeed::from_path(&path).expect("decodes");
-    assert_eq!(feed.source, RtSource::File(path.clone()));
-    assert_eq!(feed.content_fingerprint, ContentFingerprint::of(&bytes));
+    assert_eq!(feed.source(), &RtSource::File(path.clone()));
+    assert_eq!(feed.content_fingerprint(), ContentFingerprint::of(&bytes));
 
     let error = RtFeed::from_path_with_limit(&path, 4).expect_err("over the limit");
     assert!(
@@ -287,11 +304,11 @@ fn duplicate_reporting_is_deterministic() {
     }
 }
 
-/// `FeedEntity.id` is proto2-`required`, which `prost` does not enforce, so an
-/// absent id decodes to `""`. Those entities are listed separately rather than
-/// grouped together as duplicates of the empty string.
+/// Java accepts an explicitly present empty required string. Those entities are
+/// listed separately rather than grouped as duplicates of the empty string;
+/// an absent id is rejected before a context can be built.
 #[test]
-fn entities_without_an_id_are_listed_not_treated_as_duplicates() {
+fn entities_with_an_empty_id_are_listed_not_treated_as_duplicates() {
     let feed = feed_from(vec![entity(""), entity("a"), entity(""), entity("a")]);
     let context = RtSnapshotContext::new(&feed, observed_at());
 
@@ -315,38 +332,6 @@ fn entities_carrying_no_payload_are_listed() {
     let context = RtSnapshotContext::new(&feed, observed_at());
 
     assert_eq!(context.entities_without_payload, vec![0, 2]);
-}
-
-/// A message of only post-MVP payloads is not an empty message.
-#[test]
-fn deferred_payload_types_are_counted_not_ignored() {
-    let feed = feed_from(vec![
-        FeedEntity {
-            id: "s".into(),
-            shape: Some(Shape::default()),
-            ..Default::default()
-        },
-        FeedEntity {
-            id: "p".into(),
-            stop: Some(Stop::default()),
-            ..Default::default()
-        },
-        FeedEntity {
-            id: "m".into(),
-            trip_modifications: Some(TripModifications::default()),
-            ..Default::default()
-        },
-    ]);
-    let context = RtSnapshotContext::new(&feed, observed_at());
-
-    assert_eq!(context.deferred_payloads.shapes, 1);
-    assert_eq!(context.deferred_payloads.stops, 1);
-    assert_eq!(context.deferred_payloads.trip_modifications, 1);
-    assert_eq!(context.deferred_payloads.total(), 3);
-    assert!(
-        context.entities_without_payload.is_empty(),
-        "a shape is a payload, even though no MVP rule reads it"
-    );
 }
 
 #[test]
@@ -386,6 +371,23 @@ fn observation_time_is_supplied_by_the_caller() {
 }
 
 #[test]
+fn timestamps_use_the_signed_long_view_exposed_by_java() {
+    let bytes = FeedMessage {
+        header: FeedHeader {
+            gtfs_realtime_version: "2.0".to_string(),
+            timestamp: Some(1_u64 << 63),
+            ..Default::default()
+        },
+        entity: Vec::new(),
+    }
+    .encode_to_vec();
+    let feed = RtFeed::from_bytes(&bytes, RtSource::Bytes).expect("decodes");
+    let context = RtSnapshotContext::new(&feed, observed_at());
+
+    assert_eq!(context.header_timestamp(), Some(i64::MIN));
+}
+
+#[test]
 fn an_empty_message_yields_an_empty_context() {
     let feed = feed_from(Vec::new());
     let context = RtSnapshotContext::new(&feed, observed_at());
@@ -395,5 +397,4 @@ fn an_empty_message_yields_an_empty_context() {
     assert!(context.vehicle_positions.is_empty());
     assert!(context.alerts.is_empty());
     assert!(context.duplicate_entity_ids.is_empty());
-    assert_eq!(context.deferred_payloads.total(), 0);
 }

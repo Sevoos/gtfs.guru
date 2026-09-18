@@ -2,7 +2,7 @@
 name = "gtfs-guru-rt"
 version = "1.0.0"
 edition = "2021"
-license = "Apache-2.0"
+license = "Apache-2.0 AND CC-BY-3.0"
 description = "GTFS-Realtime validation for GTFS Guru"
 repository = "https://github.com/abasis-ltd/gtfs.guru"
 homepage = "https://github.com/abasis-ltd/gtfs.guru"
@@ -18,8 +18,13 @@ include = [
   "build.rs",
   "proto/gtfs-realtime.proto",
   "proto/UPSTREAM.md",
+  "proto/java-0.0.4/gtfs-realtime.proto",
+  "proto/java-0.0.4/UPSTREAM.md",
   "spec_baseline.json",
+  "tests/**/*.rs",
   "README.md",
+  "LICENSE-APACHE",
+  "LICENSE-CC-BY-3.0",
 ]
 
 [dependencies]
@@ -30,6 +35,7 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 prost = "0.14.4"
+prost-reflect = "0.16.5"
 rustc-hash = "2.1"
 sha2 = "0.10"
 
@@ -43,6 +49,7 @@ path = "../gtfs_model"
 version = "1.0.0"
 
 [build-dependencies]
+prost = "0.14.4"
 prost-build = "0.14.4"
 protox = "0.9.1"
 

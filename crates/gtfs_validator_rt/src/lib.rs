@@ -7,11 +7,13 @@
 
 #![forbid(unsafe_code)]
 
+mod canonical_decode;
+
 pub mod context;
 pub mod feed;
 
-pub use context::{DeferredPayloadCounts, DuplicateEntityId, RtEntityRef, RtSnapshotContext};
-pub use feed::{ContentFingerprint, RtFeed, RtFeedError, RtSource};
+pub use context::{as_java_long, DuplicateEntityId, RtEntityRef, RtSnapshotContext};
+pub use feed::{ContentFingerprint, RtDecodeError, RtFeed, RtFeedError, RtSource};
 
 /// Types generated from the vendored GTFS-Realtime schema.
 ///
@@ -39,6 +41,7 @@ pub const RT_SPEC_BASELINE_JSON: &str = include_str!("../spec_baseline.json");
 mod tests {
     use super::*;
     use prost::Message;
+    use sha2::{Digest, Sha256};
 
     /// The generated types exist, decode, and preserve proto2 optionality.
     #[test]
@@ -69,6 +72,19 @@ mod tests {
         assert_eq!(
             baseline["specRevision"]["commit"],
             "262ae1e46e3f66099284fb8e4f976dfec788501f"
+        );
+        assert_eq!(
+            baseline["canonicalBindingsSchema"]["commit"],
+            "c2ab4841effc5626889376b34b63e5fef1136c40"
+        );
+
+        let compatibility_schema = include_bytes!("../proto/java-0.0.4/gtfs-realtime.proto");
+        let digest = format!("{:x}", Sha256::digest(compatibility_schema));
+        assert_eq!(
+            digest,
+            baseline["canonicalBindingsSchema"]["sha256"]
+                .as_str()
+                .unwrap()
         );
     }
 }

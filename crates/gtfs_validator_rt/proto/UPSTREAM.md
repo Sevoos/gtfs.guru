@@ -68,5 +68,6 @@ Moving to a newer schema is a deliberate act, not a routine refresh. Replace
 the file, update every row of the provenance table and the checksum in
 `../spec_baseline.json`, then re-run the decoder and parity suites: a schema
 bump can change generated Rust types, and the pinned Java validator stays on
-`gtfs-realtime-bindings:0.0.4`, so newer fields will have no canonical
-counterpart and need classifying as current-spec behavior.
+`gtfs-realtime-bindings:0.0.4`. The compatibility boundary must continue to
+hide newer fields and enum values from the default profile; any current-spec
+behavior requires a separately selected profile.

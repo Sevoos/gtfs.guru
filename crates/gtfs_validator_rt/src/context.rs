@@ -1,7 +1,7 @@
 //! One ordered pass over a snapshot's entities, and the shared facts drawn
 //! from it.
 //!
-//! Every rule reads this instead of walking `feed.message.entity` itself. The
+//! Every rule reads this instead of walking `feed.message().entity` itself. The
 //! canonical Java validator re-scans the entity list once per validator -- seven
 //! of its nine scan unconditionally -- and that repetition is what this context
 //! exists to avoid.
@@ -12,6 +12,12 @@ use rustc_hash::FxHashMap;
 use crate::feed::RtFeed;
 use crate::transit_realtime::{Alert, TripUpdate, VehiclePosition};
 
+/// Reinterpret a protobuf `uint64` as the signed `long` exposed by Java's
+/// generated bindings. Canonical timestamp comparisons use this view.
+pub const fn as_java_long(value: u64) -> i64 {
+    value as i64
+}
+
 /// One payload, with the position and identity of the entity carrying it.
 ///
 /// Notices have no CSV row to point at, so `entity_index` -- the payload's
@@ -19,8 +25,8 @@ use crate::transit_realtime::{Alert, TripUpdate, VehiclePosition};
 #[derive(Debug, Clone, Copy)]
 pub struct RtEntityRef<'a, T> {
     pub entity_index: usize,
-    /// May be empty: `FeedEntity.id` is proto2-`required`, but `prost` does not
-    /// enforce that, so an absent id decodes to `""`.
+    /// May be empty: Java accepts an explicitly present empty required string.
+    /// An absent `FeedEntity.id` is rejected by the loading boundary.
     pub entity_id: &'a str,
     pub payload: &'a T,
 }
@@ -31,21 +37,6 @@ pub struct RtEntityRef<'a, T> {
 pub struct DuplicateEntityId<'a> {
     pub entity_id: &'a str,
     pub indices: Vec<usize>,
-}
-
-/// Payload types the schema defines but the MVP does not validate. Counted so
-/// that a message carrying only these is not mistaken for an empty one.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct DeferredPayloadCounts {
-    pub shapes: usize,
-    pub stops: usize,
-    pub trip_modifications: usize,
-}
-
-impl DeferredPayloadCounts {
-    pub fn total(&self) -> usize {
-        self.shapes + self.stops + self.trip_modifications
-    }
 }
 
 /// The snapshot as the rules see it.
@@ -85,13 +76,11 @@ pub struct RtSnapshotContext<'a> {
     /// Entities carrying none of the schema's payload fields.
     pub entities_without_payload: Vec<usize>,
 
-    /// Entities whose required `id` decoded to the empty string.
+    /// Entities whose explicitly present required `id` is empty.
     pub entities_without_id: Vec<usize>,
 
     /// Non-empty ids used more than once, in first-seen order.
     pub duplicate_entity_ids: Vec<DuplicateEntityId<'a>>,
-
-    pub deferred_payloads: DeferredPayloadCounts,
 }
 
 impl<'a> RtSnapshotContext<'a> {
@@ -104,8 +93,6 @@ impl<'a> RtSnapshotContext<'a> {
         let mut alerts = Vec::new();
         let mut entities_without_payload = Vec::new();
         let mut entities_without_id = Vec::new();
-        let mut deferred_payloads = DeferredPayloadCounts::default();
-
         // First-seen order is kept in `occurrences`; the map only locates a
         // bucket. Nothing iterates the map, so no output depends on hash order.
         let mut bucket_of: FxHashMap<&str, usize> = FxHashMap::default();
@@ -152,19 +139,6 @@ impl<'a> RtSnapshotContext<'a> {
                 });
                 carries_payload = true;
             }
-            if entity.shape.is_some() {
-                deferred_payloads.shapes += 1;
-                carries_payload = true;
-            }
-            if entity.stop.is_some() {
-                deferred_payloads.stops += 1;
-                carries_payload = true;
-            }
-            if entity.trip_modifications.is_some() {
-                deferred_payloads.trip_modifications += 1;
-                carries_payload = true;
-            }
-
             if !carries_payload {
                 entities_without_payload.push(entity_index);
             }
@@ -186,19 +160,17 @@ impl<'a> RtSnapshotContext<'a> {
             entities_without_payload,
             entities_without_id,
             duplicate_entity_ids,
-            deferred_payloads,
         }
     }
 
-    /// Whether the snapshot supplies both entity types the combined-feed rules
-    /// (W003, E047) need. They are skipped otherwise rather than reported as
-    /// passing.
+    /// Whether the snapshot supplies both entity types needed by the deferred
+    /// combined-feed rules W003 and E047.
     pub fn has_combined_trip_and_vehicle_entities(&self) -> bool {
         !self.trip_updates.is_empty() && !self.vehicle_positions.is_empty()
     }
 
     /// The header timestamp, when the producer sent one.
-    pub fn header_timestamp(&self) -> Option<u64> {
-        self.feed.message.header.timestamp
+    pub fn header_timestamp(&self) -> Option<i64> {
+        self.feed.message().header.timestamp.map(as_java_long)
     }
 }

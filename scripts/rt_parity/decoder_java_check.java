@@ -3,10 +3,9 @@
 // gtfs-realtime-validator JAR at commit 7041fa3f) and prints what Java does
 // with each one.
 //
-// Its purpose is to record where prost and the canonical decoder disagree.
-// crates/gtfs_validator_rt/tests/decoder.rs pins the Rust side; this prints the
-// Java side so the two can be compared by eye and any divergence written up as
-// an approved delta.
+// Its purpose is to pin canonical decoder behavior for the compatibility
+// boundary in crates/gtfs_validator_rt/tests/decoder.rs. A mismatch is an
+// implementation failure unless it is separately reviewed and approved.
 //
 //   cargo test -p gtfs-guru-rt --test decoder -- --ignored dump_fixtures
 //   java -cp "$GTFS_RT_VALIDATOR_JAR" scripts/rt_parity/decoder_java_check.java \
@@ -51,6 +50,13 @@ public class decoder_java_check {
                 // set, so the field reads as *absent* rather than as present with
                 // an invalid value. prost instead surfaces the raw integer.
                 notes.add("hasIncrementality=" + message.getHeader().hasIncrementality());
+                if (message.getHeader().hasIncrementality()) {
+                    notes.add("incrementality=" + message.getHeader().getIncrementality().getNumber());
+                }
+                notes.add("hasTimestamp=" + message.getHeader().hasTimestamp());
+                if (message.getHeader().hasTimestamp()) {
+                    notes.add("timestamp=" + message.getHeader().getTimestamp());
+                }
 
                 System.out.printf("%-30s %-10s %s%n", name, "PARSED", String.join(" ", notes));
             } catch (Exception failure) {

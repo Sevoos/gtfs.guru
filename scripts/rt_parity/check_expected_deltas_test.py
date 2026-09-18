@@ -22,17 +22,21 @@ sys.path.insert(0, str(HERE))
 import check_expected_deltas as checker  # noqa: E402
 
 RT_BASELINE = {
-    "specRevision": {"commit": "474750a163088673df718838d4a1bb093391f9af"},
+    "specRevision": {"commit": "262ae1e46e3f66099284fb8e4f976dfec788501f"},
     "canonicalBaseline": {
         "commit": "7041fa3fcaf674bf730e17325c179d329cdff6f2",
         "jarSha256": "31b31b4b5f2d18562f5dcdd6dc407e4c1f1c9c07a9b63de65f0d37492a363ae8",
+    },
+    "canonicalBindingsSchema": {
+        "commit": "c2ab4841effc5626889376b34b63e5fef1136c40",
+        "sha256": "09a04b89995ddcbfce722baefc5be4a8dcfd61637d949cbf3998991dd219b26e",
     },
 }
 
 VALID_DELTA = {
     "id": "a-difference",
     "status": "proposed",
-    "blockedOn": "GTF-11 question 10",
+    "blockedOn": "a pending product decision",
     "canonicalRuleId": None,
     "noticeCode": None,
     "fixture": "a fixture",
@@ -51,6 +55,8 @@ VALID_LEDGER = {
         "javaCommit": RT_BASELINE["canonicalBaseline"]["commit"],
         "javaJarSha256": RT_BASELINE["canonicalBaseline"]["jarSha256"],
         "rtSchemaCommit": RT_BASELINE["specRevision"]["commit"],
+        "bindingsSchemaCommit": RT_BASELINE["canonicalBindingsSchema"]["commit"],
+        "bindingsSchemaSha256": RT_BASELINE["canonicalBindingsSchema"]["sha256"],
     },
     "deltas": [copy.deepcopy(VALID_DELTA)],
 }
@@ -123,6 +129,16 @@ class CheckerCase(unittest.TestCase):
     def test_a_moved_schema_pin_is_caught(self) -> None:
         document = ledger()
         document["baseline"]["rtSchemaCommit"] = "f" * 40
+        self.assertProblem(checker.check(document, RT_BASELINE), "different oracle")
+
+    def test_a_moved_bindings_schema_is_caught(self) -> None:
+        document = ledger()
+        document["baseline"]["bindingsSchemaCommit"] = "e" * 40
+        self.assertProblem(checker.check(document, RT_BASELINE), "different oracle")
+
+    def test_an_edited_bindings_schema_is_caught(self) -> None:
+        document = ledger()
+        document["baseline"]["bindingsSchemaSha256"] = "d" * 64
         self.assertProblem(checker.check(document, RT_BASELINE), "different oracle")
 
     def test_an_unknown_status_is_caught(self) -> None:

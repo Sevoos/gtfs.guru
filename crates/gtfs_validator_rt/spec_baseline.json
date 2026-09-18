@@ -17,6 +17,17 @@
     "license": "Apache-2.0",
     "licenseHolder": "The GTFS Specifications Authors"
   },
+  "canonicalBindingsSchema": {
+    "repository": "MobilityData/gtfs-realtime-bindings",
+    "tag": "gtfs-realtime-bindings-java-0.0.4",
+    "commit": "c2ab4841effc5626889376b34b63e5fef1136c40",
+    "committedAt": "2015-02-27T05:42:44Z",
+    "path": "proto/java-0.0.4/gtfs-realtime.proto",
+    "sha256": "09a04b89995ddcbfce722baefc5be4a8dcfd61637d949cbf3998991dd219b26e",
+    "sizeBytes": 26616,
+    "sourceUrl": "https://raw.githubusercontent.com/google/gtfs-realtime-bindings/c2ab4841effc5626889376b34b63e5fef1136c40/gtfs-realtime.proto",
+    "license": "CC-BY-3.0"
+  },
   "canonicalBaseline": {
     "repository": "MobilityData/gtfs-realtime-validator",
     "ref": "master",
@@ -30,5 +41,5 @@
     "jarReproducibleFromCommit": false,
     "bindingsVerifiedInJar": "0.0.4"
   },
-  "updatedAt": "2026-09-10T00:00:00Z"
+  "updatedAt": "2026-09-18T00:00:00Z"
 }

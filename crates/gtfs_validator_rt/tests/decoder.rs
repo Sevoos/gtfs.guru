@@ -3,15 +3,15 @@
 //!
 //! GTF-11 Phase 0 requires this evidence *before* rules are written, because
 //! each answer decides what a rule can even observe. These tests pin measured
-//! behaviour, not intended behaviour: where `prost` and the pinned Java
-//! bindings disagree, the test documents the divergence rather than asserting
-//! the behaviour we would have preferred.
+//! raw `prost` behaviour and the Java-compatible `RtFeed` boundary separately.
+//! Rules only see messages accepted and normalized by `RtFeed`.
 //!
 //! `scripts/rt_parity/decoder_java_check.java` replays the same bytes through
 //! `gtfs-realtime-bindings:0.0.4`. Run `dump_fixtures` (ignored by default) to
 //! regenerate its inputs.
 
 use gtfs_guru_rt::transit_realtime::*;
+use gtfs_guru_rt::{RtDecodeError, RtFeed, RtFeedError, RtSource};
 use prost::Message;
 
 // -- protobuf wire-format construction -------------------------------------
@@ -73,6 +73,10 @@ fn feed_message_bytes(entities: &[Vec<u8>]) -> Vec<u8> {
     message
 }
 
+fn load(bytes: &[u8]) -> Result<RtFeed, RtFeedError> {
+    RtFeed::from_bytes(bytes, RtSource::Bytes)
+}
+
 // -- proto2 required fields ------------------------------------------------
 
 /// **The headline finding: `prost` does not enforce proto2 `required`.**
@@ -81,15 +85,9 @@ fn feed_message_bytes(entities: &[Vec<u8>]) -> Vec<u8> {
 /// required `header` is a defaulted `FeedHeader` and whose required
 /// `gtfs_realtime_version` is `""`.
 ///
-/// The pinned Java bindings reject the same bytes with
-/// `InvalidProtocolBufferException`, so this is a real divergence from the
-/// canonical validator, not a detail. Two consequences for the rule engine:
-///
-/// 1. Presence of every required field must be checked by an explicit rule.
-///    The decoder will never raise it.
-/// 2. Because `required` generates a non-`Option` field, "absent" and "present
-///    but empty" are indistinguishable after decoding. A rule that must tell
-///    them apart cannot be written against the decoded message alone.
+/// The pinned Java bindings reject the same bytes. `RtFeed` closes this raw
+/// generated-binding gap before rules run; the test remains as evidence for why
+/// that compatibility boundary exists.
 #[test]
 fn empty_input_decodes_instead_of_failing() {
     let decoded = FeedMessage::decode(&[][..]).expect("prost accepts empty input");
@@ -151,6 +149,125 @@ fn missing_required_nested_field_decodes() {
         .as_ref()
         .expect("trip_update present");
     assert_eq!(trip_update.trip.trip_id, None);
+}
+
+#[test]
+fn compatibility_boundary_rejects_missing_required_fields() {
+    let mut message_without_header = Vec::new();
+    len_delimited(2, &[], &mut message_without_header);
+
+    let mut header_without_version = Vec::new();
+    varint_field(3, 1_700_000_000, &mut header_without_version);
+    let mut message_without_version = Vec::new();
+    len_delimited(1, &header_without_version, &mut message_without_version);
+
+    let mut trip_update_without_trip = Vec::new();
+    len_delimited(1, b"entity-1", &mut trip_update_without_trip);
+    len_delimited(3, &[], &mut trip_update_without_trip);
+    let message_without_trip = feed_message_bytes(&[trip_update_without_trip]);
+
+    let message_without_entity_id = feed_message_bytes(&[Vec::new()]);
+
+    let mut position_without_longitude = Vec::new();
+    float_field(1, 47.5, &mut position_without_longitude);
+    let mut vehicle = Vec::new();
+    len_delimited(2, &position_without_longitude, &mut vehicle);
+    let mut vehicle_entity = Vec::new();
+    len_delimited(1, b"vehicle", &mut vehicle_entity);
+    len_delimited(4, &vehicle, &mut vehicle_entity);
+    let message_without_longitude = feed_message_bytes(&[vehicle_entity]);
+
+    let mut translated_string = Vec::new();
+    len_delimited(1, &[], &mut translated_string);
+    let mut alert = Vec::new();
+    len_delimited(10, &translated_string, &mut alert);
+    let mut alert_entity = Vec::new();
+    len_delimited(1, b"alert", &mut alert_entity);
+    len_delimited(5, &alert, &mut alert_entity);
+    let message_without_translation_text = feed_message_bytes(&[alert_entity]);
+
+    let cases = [
+        ("empty", Vec::new(), ".header"),
+        ("missing header", message_without_header, ".header"),
+        (
+            "missing version",
+            message_without_version,
+            ".header.gtfs_realtime_version",
+        ),
+        (
+            "missing nested trip",
+            message_without_trip,
+            ".entity[0].trip_update.trip",
+        ),
+        (
+            "missing entity id",
+            message_without_entity_id,
+            ".entity[0].id",
+        ),
+        (
+            "missing position longitude",
+            message_without_longitude,
+            ".entity[0].vehicle.position.longitude",
+        ),
+        (
+            "missing translation text",
+            message_without_translation_text,
+            ".entity[0].alert.header_text.translation[0].text",
+        ),
+    ];
+
+    for (name, bytes, expected_path) in cases {
+        let error = load(&bytes).expect_err(name);
+        match error {
+            RtFeedError::Decode {
+                error: RtDecodeError::MissingRequired { fields },
+                ..
+            } => {
+                assert!(fields.contains(expected_path), "{name}: {fields}");
+            }
+            other => panic!("{name}: expected missing-required error, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn compatibility_boundary_preserves_present_empty_required_string() {
+    let mut header = Vec::new();
+    len_delimited(1, b"", &mut header);
+    let mut message = Vec::new();
+    len_delimited(1, &header, &mut message);
+
+    let feed = load(&message).expect("an explicitly present empty string is initialized in Java");
+
+    assert_eq!(feed.message().header.gtfs_realtime_version, "");
+}
+
+#[test]
+fn required_fields_are_checked_after_message_merging() {
+    let mut latitude = Vec::new();
+    float_field(1, 47.5, &mut latitude);
+    let mut longitude = Vec::new();
+    float_field(2, 8.5, &mut longitude);
+
+    let mut vehicle = Vec::new();
+    len_delimited(2, &latitude, &mut vehicle);
+    len_delimited(2, &longitude, &mut vehicle);
+
+    let mut entity = Vec::new();
+    len_delimited(1, b"vehicle", &mut entity);
+    len_delimited(4, &vehicle, &mut entity);
+
+    let feed = load(&feed_message_bytes(&[entity]))
+        .expect("duplicate message occurrences merge before required checks");
+    let position = feed.message().entity[0]
+        .vehicle
+        .as_ref()
+        .unwrap()
+        .position
+        .as_ref()
+        .unwrap();
+    assert_eq!(position.latitude, 47.5);
+    assert_eq!(position.longitude, 8.5);
 }
 
 // -- fields optional in proto2 but required by GTFS-Realtime v2.0 ----------
@@ -239,10 +356,8 @@ fn extension_range_fields_decode_but_are_dropped() {
 /// is generated as `Option<i32>`, not as an enum type.
 ///
 /// The pinned Java bindings differ: proto2 moves an unrecognised enum value
-/// into the unknown-field set, so `hasIncrementality()` returns `false` and the
-/// field reads as *absent*. Rust sees "present but invalid", Java sees
-/// "absent". Any rule over `incrementality` must pick one reading deliberately
-/// and record the choice as an approved delta.
+/// into the unknown-field set. This test pins raw generated Rust behavior;
+/// `RtFeed` normalizes it before rules can observe the field.
 #[test]
 fn unknown_enum_values_are_preserved_as_integers() {
     let mut header = valid_header_bytes();
@@ -256,6 +371,106 @@ fn unknown_enum_values_are_preserved_as_integers() {
         feed_header::Incrementality::try_from(99).is_err(),
         "and it is not a defined variant"
     );
+}
+
+#[test]
+fn compatibility_boundary_ignores_unknown_enum_occurrences() {
+    let mut header = valid_header_bytes();
+    varint_field(2, 99, &mut header);
+    let mut message = Vec::new();
+    len_delimited(1, &header, &mut message);
+
+    let feed = load(&message).expect("unknown enum is unknown data in proto2 Java");
+
+    assert_eq!(feed.message().header.incrementality, None);
+}
+
+#[test]
+fn compatibility_boundary_keeps_known_enum_before_unknown_enum() {
+    let mut header = valid_header_bytes();
+    varint_field(2, 1, &mut header);
+    varint_field(2, 99, &mut header);
+    let mut message = Vec::new();
+    len_delimited(1, &header, &mut message);
+
+    let feed = load(&message).expect("the unknown occurrence does not replace the known value");
+
+    assert_eq!(
+        feed.message().header.incrementality,
+        Some(feed_header::Incrementality::Differential as i32)
+    );
+}
+
+#[test]
+fn compatibility_boundary_uses_java_string_replacement_semantics() {
+    let cases: &[(&[u8], &str)] = &[
+        (&[b'2', b'.', 0xff], "2.\u{fffd}"),
+        (&[0xed, 0xa0, 0x80], "\u{fffd}"),
+        (&[0xe1, 0x80, b'A'], "\u{fffd}A"),
+        (&[0xe2, 0x82], "\u{fffd}"),
+    ];
+
+    for (encoded, expected) in cases {
+        let mut header = Vec::new();
+        len_delimited(1, encoded, &mut header);
+        let mut message = Vec::new();
+        len_delimited(1, &header, &mut message);
+
+        let feed =
+            load(&message).expect("Java exposes invalid UTF-8 through replacement characters");
+
+        assert_eq!(&feed.message().header.gtfs_realtime_version, expected);
+    }
+}
+
+#[test]
+fn compatibility_boundary_uses_java_varint32_narrowing() {
+    let mut header = Vec::new();
+    len_delimited(1, b"2.0", &mut header);
+    varint_field(2, (1_u64 << 32) | 1, &mut header);
+
+    let mut message = Vec::new();
+    varint((1_u64 << 32) | 10, &mut message); // header tag, narrowed to 10
+    varint((1_u64 << 32) | header.len() as u64, &mut message);
+    message.extend_from_slice(&header);
+
+    let feed = load(&message).expect("Java discards upper bits of tags, lengths, and enums");
+
+    assert_eq!(
+        feed.message().header.incrementality,
+        Some(feed_header::Incrementality::Differential as i32)
+    );
+}
+
+#[test]
+fn compatibility_boundary_uses_java_varint64_narrowing() {
+    let mut header = Vec::new();
+    len_delimited(1, b"2.0", &mut header);
+    tag(3, 0, &mut header);
+    header.extend_from_slice(&[0x80; 9]);
+    header.push(0x02); // Java uses byte ten only as a terminator.
+    let mut message = Vec::new();
+    len_delimited(1, &header, &mut message);
+
+    let feed = load(&message).expect("Java accepts payload bits above bit 63 in byte ten");
+
+    assert_eq!(feed.message().header.timestamp, Some(1_u64 << 63));
+}
+
+#[test]
+fn compatibility_boundary_rejects_varints_longer_than_java_allows() {
+    let mut message = Vec::new();
+    len_delimited(1, &valid_header_bytes(), &mut message);
+    tag(999, 0, &mut message);
+    message.extend_from_slice(&[0x80; 11]);
+
+    assert!(matches!(
+        load(&message),
+        Err(RtFeedError::Decode {
+            error: RtDecodeError::Malformed { .. },
+            ..
+        })
+    ));
 }
 
 // -- content identity ------------------------------------------------------
@@ -326,6 +541,45 @@ fn wrong_wire_type_for_known_field_fails() {
     varint_field(1, 5, &mut message); // header as a varint, not a submessage
 
     assert!(FeedMessage::decode(&message[..]).is_err());
+}
+
+#[test]
+fn compatibility_boundary_ignores_wrong_wire_occurrence() {
+    let mut message = Vec::new();
+    len_delimited(1, &valid_header_bytes(), &mut message);
+    varint_field(1, 5, &mut message);
+
+    assert!(
+        FeedMessage::decode(&message[..]).is_err(),
+        "raw prost lets the later wrong-wire occurrence poison the field"
+    );
+
+    let feed = load(&message).expect("Java retains the valid header and ignores wrong-wire data");
+    assert_eq!(feed.message().header.gtfs_realtime_version, "2.0");
+}
+
+#[test]
+fn compatibility_boundary_matches_java_group_recursion_limit() {
+    fn message_with_groups(depth: usize) -> Vec<u8> {
+        let mut message = Vec::new();
+        len_delimited(1, &valid_header_bytes(), &mut message);
+        for _ in 0..depth {
+            tag(999, 3, &mut message);
+        }
+        for _ in 0..depth {
+            tag(999, 4, &mut message);
+        }
+        message
+    }
+
+    load(&message_with_groups(64)).expect("Java accepts 64 nested groups");
+    assert!(matches!(
+        load(&message_with_groups(65)),
+        Err(RtFeedError::Decode {
+            error: RtDecodeError::RecursionLimit { limit: 64, .. },
+            ..
+        })
+    ));
 }
 
 // -- entity payloads -------------------------------------------------------
@@ -406,11 +660,65 @@ fn each_entity_type_decodes() {
     assert_eq!(decoded.entity[2].alert.as_ref().unwrap().cause, Some(2));
 }
 
+#[test]
+fn compatibility_boundary_hides_fields_absent_from_java_schema() {
+    let bytes = FeedMessage {
+        header: FeedHeader {
+            gtfs_realtime_version: "2.0".to_string(),
+            ..Default::default()
+        },
+        entity: vec![FeedEntity {
+            id: "shape".to_string(),
+            shape: Some(Shape::default()),
+            ..Default::default()
+        }],
+    }
+    .encode_to_vec();
+
+    let feed = load(&bytes).expect("current-only fields are unknown to Java, not load failures");
+
+    assert!(feed.message().entity[0].shape.is_none());
+}
+
+#[test]
+fn compatibility_boundary_hides_enum_values_absent_from_java_schema() {
+    let bytes = FeedMessage {
+        header: FeedHeader {
+            gtfs_realtime_version: "2.0".to_string(),
+            ..Default::default()
+        },
+        entity: vec![FeedEntity {
+            id: "trip".to_string(),
+            trip_update: Some(TripUpdate {
+                trip: TripDescriptor {
+                    schedule_relationship: Some(trip_descriptor::ScheduleRelationship::New as i32),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ..Default::default()
+        }],
+    }
+    .encode_to_vec();
+
+    let feed = load(&bytes).expect("a current-only enum is unknown data to Java");
+
+    assert_eq!(
+        feed.message().entity[0]
+            .trip_update
+            .as_ref()
+            .unwrap()
+            .trip
+            .schedule_relationship,
+        None
+    );
+}
+
 // -- size --------------------------------------------------------------------
 
 /// `prost` applies no size ceiling of its own: a large message decodes, and
-/// allocation tracks the input. Bounding input is therefore the adapter's job
-/// (CLI/URL fetch), as GTF-11 specifies -- not something the decoder provides.
+/// allocation tracks the input. Bounding input is therefore the `RtFeed` input
+/// boundary's job, with URL adapters applying the same rule while fetching.
 #[test]
 fn large_messages_decode_without_a_built_in_limit() {
     let entities: Vec<Vec<u8>> = (0..50_000)
@@ -461,9 +769,93 @@ fn dump_fixtures() {
     let mut unknown_enum = Vec::new();
     len_delimited(1, &header_unknown_enum, &mut unknown_enum);
 
+    let mut header_known_then_unknown_enum = valid_header_bytes();
+    varint_field(2, 1, &mut header_known_then_unknown_enum);
+    varint_field(2, 99, &mut header_known_then_unknown_enum);
+    let mut known_then_unknown_enum = Vec::new();
+    len_delimited(
+        1,
+        &header_known_then_unknown_enum,
+        &mut known_then_unknown_enum,
+    );
+
+    let mut header_invalid_utf8 = Vec::new();
+    len_delimited(1, &[b'2', b'.', 0xff], &mut header_invalid_utf8);
+    let mut invalid_utf8 = Vec::new();
+    len_delimited(1, &header_invalid_utf8, &mut invalid_utf8);
+
+    let invalid_utf8_fixture = |payload: &[u8]| {
+        let mut header = Vec::new();
+        len_delimited(1, payload, &mut header);
+        let mut message = Vec::new();
+        len_delimited(1, &header, &mut message);
+        message
+    };
+
+    let mut overwide_varint32_header = Vec::new();
+    len_delimited(1, b"2.0", &mut overwide_varint32_header);
+    varint_field(2, (1_u64 << 32) | 1, &mut overwide_varint32_header);
+    let mut overwide_varint32 = Vec::new();
+    varint((1_u64 << 32) | 10, &mut overwide_varint32);
+    varint(
+        (1_u64 << 32) | overwide_varint32_header.len() as u64,
+        &mut overwide_varint32,
+    );
+    overwide_varint32.extend_from_slice(&overwide_varint32_header);
+
+    let mut overwide_varint64_header = Vec::new();
+    len_delimited(1, b"2.0", &mut overwide_varint64_header);
+    tag(3, 0, &mut overwide_varint64_header);
+    overwide_varint64_header.extend_from_slice(&[0x80; 9]);
+    overwide_varint64_header.push(0x02);
+    let mut overwide_varint64 = Vec::new();
+    len_delimited(1, &overwide_varint64_header, &mut overwide_varint64);
+
+    let mut eleven_byte_varint = Vec::new();
+    len_delimited(1, &valid_header_bytes(), &mut eleven_byte_varint);
+    tag(999, 0, &mut eleven_byte_varint);
+    eleven_byte_varint.extend_from_slice(&[0x80; 11]);
+
+    let group_fixture = |depth| {
+        let mut message = Vec::new();
+        len_delimited(1, &valid_header_bytes(), &mut message);
+        for _ in 0..depth {
+            tag(999, 3, &mut message);
+        }
+        for _ in 0..depth {
+            tag(999, 4, &mut message);
+        }
+        message
+    };
+
+    let mut valid_then_wrong_wire = Vec::new();
+    len_delimited(1, &valid_header_bytes(), &mut valid_then_wrong_wire);
+    varint_field(1, 5, &mut valid_then_wrong_wire);
+
+    let mut header_present_empty = Vec::new();
+    len_delimited(1, b"", &mut header_present_empty);
+    let mut present_empty_required = Vec::new();
+    len_delimited(1, &header_present_empty, &mut present_empty_required);
+
     let mut trip_update_no_trip = Vec::new();
     len_delimited(1, b"entity-1", &mut trip_update_no_trip);
     len_delimited(3, &[], &mut trip_update_no_trip);
+
+    let mut position_without_longitude = Vec::new();
+    float_field(1, 47.5, &mut position_without_longitude);
+    let mut vehicle = Vec::new();
+    len_delimited(2, &position_without_longitude, &mut vehicle);
+    let mut vehicle_entity = Vec::new();
+    len_delimited(1, b"vehicle", &mut vehicle_entity);
+    len_delimited(4, &vehicle, &mut vehicle_entity);
+
+    let mut translated_string = Vec::new();
+    len_delimited(1, &[], &mut translated_string);
+    let mut alert = Vec::new();
+    len_delimited(10, &translated_string, &mut alert);
+    let mut alert_entity = Vec::new();
+    len_delimited(1, b"alert", &mut alert_entity);
+    len_delimited(5, &alert, &mut alert_entity);
 
     let fixtures: Vec<(&str, Vec<u8>)> = vec![
         ("empty", Vec::new()),
@@ -477,9 +869,42 @@ fn dump_fixtures() {
             "missing_required_nested_trip",
             feed_message_bytes(&[trip_update_no_trip]),
         ),
+        (
+            "missing_required_entity_id",
+            feed_message_bytes(&[Vec::new()]),
+        ),
+        (
+            "missing_required_position_longitude",
+            feed_message_bytes(&[vehicle_entity]),
+        ),
+        (
+            "missing_required_translation_text",
+            feed_message_bytes(&[alert_entity]),
+        ),
         ("unknown_field", unknown_field),
         ("extension_field", feed_message_bytes(&[extension_entity])),
         ("unknown_enum", unknown_enum),
+        ("known_then_unknown_enum", known_then_unknown_enum),
+        ("invalid_utf8_string", invalid_utf8),
+        (
+            "invalid_utf8_surrogate",
+            invalid_utf8_fixture(&[0xed, 0xa0, 0x80]),
+        ),
+        (
+            "invalid_utf8_bad_third",
+            invalid_utf8_fixture(&[0xe1, 0x80, b'A']),
+        ),
+        (
+            "invalid_utf8_truncated",
+            invalid_utf8_fixture(&[0xe2, 0x82]),
+        ),
+        ("overwide_varint32", overwide_varint32),
+        ("overwide_varint64", overwide_varint64),
+        ("eleven_byte_varint", eleven_byte_varint),
+        ("groups_64", group_fixture(64)),
+        ("groups_65", group_fixture(65)),
+        ("valid_then_wrong_wire", valid_then_wrong_wire),
+        ("present_empty_required", present_empty_required),
         ("valid_minimal", {
             let mut message = Vec::new();
             len_delimited(1, &valid_header_bytes(), &mut message);

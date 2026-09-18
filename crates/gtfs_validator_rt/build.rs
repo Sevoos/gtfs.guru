@@ -13,14 +13,19 @@
 use std::env;
 use std::path::PathBuf;
 
+use prost::Message;
+
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir"));
     let proto_dir = manifest_dir.join("proto");
     let proto_file = proto_dir.join("gtfs-realtime.proto");
+    let java_proto_dir = proto_dir.join("java-0.0.4");
+    let java_proto_file = java_proto_dir.join("gtfs-realtime.proto");
 
     // Rerun only when an input actually changes; without these, Cargo reruns
     // the script on every build of the crate.
     println!("cargo:rerun-if-changed={}", proto_file.display());
+    println!("cargo:rerun-if-changed={}", java_proto_file.display());
     println!(
         "cargo:rerun-if-changed={}",
         manifest_dir.join("spec_baseline.json").display()
@@ -40,4 +45,17 @@ fn main() {
     config
         .compile_fds(file_descriptors)
         .expect("generate Rust bindings from descriptor set");
+
+    // The current schema generates the public model, while the schema bundled
+    // in Java bindings 0.0.4 defines which wire fields and enum values the
+    // canonical validator can observe. Keep the latter as a descriptor only:
+    // generating a second set of identically named Rust types would make it too
+    // easy for rules to use the wrong model.
+    let java_descriptors = protox::compile([&java_proto_file], [&java_proto_dir])
+        .expect("compile Java 0.0.4 compatibility schema");
+    std::fs::write(
+        out_dir.join("gtfs-realtime-java-0.0.4.bin"),
+        java_descriptors.encode_to_vec(),
+    )
+    .expect("write Java 0.0.4 compatibility descriptor");
 }

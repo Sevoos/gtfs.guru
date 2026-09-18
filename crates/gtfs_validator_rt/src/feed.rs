@@ -2,23 +2,26 @@
 //! rules are allowed to see.
 
 use std::fmt;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use prost::Message;
 use sha2::{Digest, Sha256};
 
+use crate::canonical_decode;
 use crate::transit_realtime::FeedMessage;
 
 /// Default ceiling on a single RT message.
 ///
-/// The decoder imposes none of its own -- a 50k-entity message decodes with
-/// allocation tracking the input (see `tests/decoder.rs`) -- so the bound lives
-/// here, at the edge where bytes enter. Real snapshots are a few megabytes;
-/// this is deliberately generous while still refusing a hostile payload.
+/// Raw `prost` decoding imposes no input ceiling -- a 50k-entity message decodes
+/// with allocation tracking the input (see `tests/decoder.rs`) -- so the bound
+/// lives here, at the edge where bytes enter. Real snapshots are a few
+/// megabytes; this is deliberately generous while still refusing a hostile
+/// payload.
 ///
 /// Override with `GTFS_VALIDATOR_MAX_RT_BYTES`, matching the convention of the
 /// Schedule reader's `GTFS_VALIDATOR_MAX_MEMBER_BYTES`.
-const DEFAULT_MAX_RT_BYTES: u64 = 256 * 1024 * 1024;
+const DEFAULT_MAX_RT_BYTES: u64 = 64 * 1024 * 1024;
 
 pub fn max_rt_bytes() -> u64 {
     std::env::var("GTFS_VALIDATOR_MAX_RT_BYTES")
@@ -50,10 +53,10 @@ impl fmt::Display for RtSource {
 /// SHA-256 over the bytes **as received**, before decoding.
 ///
 /// It must be taken over the raw input rather than over the decoded message or
-/// a re-encoding of it. `prost` keeps no unknown-field set, so unknown and
-/// extension fields are dropped at decode time: two snapshots differing only in
-/// their MTA-style extension data re-encode to identical bytes and compare
-/// equal as decoded values. `tests/decoder.rs` pins that behaviour.
+/// a re-encoding of it. The Java-compatibility boundary deliberately removes
+/// fields the old bindings cannot observe, and generated `prost` values keep no
+/// unknown-field set. Two snapshots differing only in extension data therefore
+/// compare equal as decoded values; `tests/decoder.rs` pins that behavior.
 ///
 /// The bytes themselves are not retained. GTF-11 asks for no extra full input
 /// buffer without a demonstrated need, and a digest is what the duplicate-
@@ -89,8 +92,26 @@ impl fmt::Debug for ContentFingerprint {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum RtDecodeError {
+    #[error("malformed protobuf at {path}: {detail}")]
+    Malformed { path: String, detail: String },
+
+    #[error("message missing required fields: {fields}")]
+    MissingRequired { fields: String },
+
+    #[error("protobuf recursion limit {limit} exceeded at {path}")]
+    RecursionLimit { path: String, limit: usize },
+
+    #[error("Java-compatible protobuf normalization exceeded {limit} bytes at {path}")]
+    NormalizationLimit { path: String, limit: usize },
+
+    #[error("could not decode Java-compatible realtime message: {0}")]
+    Prost(#[source] prost::DecodeError),
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum RtFeedError {
-    #[error("realtime message is {actual} bytes, over the {limit} byte limit")]
+    #[error("realtime message is at least {actual} bytes, over the {limit} byte limit")]
     TooLarge { actual: u64, limit: u64 },
 
     #[error("could not read {path}: {source}")]
@@ -100,25 +121,28 @@ pub enum RtFeedError {
         source: std::io::Error,
     },
 
-    /// A decode failure, not a validation notice.
-    ///
-    /// Only structurally impossible input lands here -- truncation, a lying
-    /// length prefix, a wrong wire type. Input that is merely *invalid* decodes
-    /// successfully and is reported by rules: `prost` does not enforce proto2
-    /// `required`, so a message with no header at all decodes to defaults where
-    /// the canonical Java bindings would reject it.
-    #[error("could not decode realtime message: {0}")]
-    Decode(#[from] prost::DecodeError),
+    /// A load failure, not a validation notice. No ordinary rule runs when the
+    /// Java 0.0.4 bindings would reject the message.
+    #[error(
+        "could not decode realtime message from {input} ({encoded_len} bytes, sha256 {content_fingerprint}): {error}"
+    )]
+    Decode {
+        input: RtSource,
+        encoded_len: usize,
+        content_fingerprint: ContentFingerprint,
+        #[source]
+        error: RtDecodeError,
+    },
 }
 
 /// A decoded message together with its provenance.
 #[derive(Debug, Clone)]
 pub struct RtFeed {
-    pub message: FeedMessage,
-    pub source: RtSource,
+    message: FeedMessage,
+    source: RtSource,
     /// Size of the received payload in bytes, before decoding.
-    pub encoded_len: usize,
-    pub content_fingerprint: ContentFingerprint,
+    encoded_len: usize,
+    content_fingerprint: ContentFingerprint,
 }
 
 impl RtFeed {
@@ -143,7 +167,12 @@ impl RtFeed {
         }
 
         let content_fingerprint = ContentFingerprint::of(bytes);
-        let message = FeedMessage::decode(bytes)?;
+        let message = canonical_decode::decode(bytes).map_err(|error| RtFeedError::Decode {
+            input: source.clone(),
+            encoded_len: bytes.len(),
+            content_fingerprint,
+            error,
+        })?;
 
         Ok(Self {
             message,
@@ -153,7 +182,8 @@ impl RtFeed {
         })
     }
 
-    /// Read a local `.pb` file, refusing an oversized one before it is loaded.
+    /// Read a local `.pb` file without ever reading more than the configured
+    /// ceiling plus one byte.
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, RtFeedError> {
         Self::from_path_with_limit(path, max_rt_bytes())
     }
@@ -175,10 +205,24 @@ impl RtFeed {
             });
         }
 
-        let bytes = std::fs::read(path).map_err(|source| RtFeedError::Io {
+        let mut file = File::open(path).map_err(|source| RtFeedError::Io {
             path: path.to_path_buf(),
             source,
         })?;
+
+        // Metadata avoids allocating for an already-large file. `take` is the
+        // actual safety boundary: the file may grow after metadata was read.
+        let bytes =
+            read_bounded(&mut file, metadata.len(), limit).map_err(|source| RtFeedError::Io {
+                path: path.to_path_buf(),
+                source,
+            })?;
+        if bytes.len() as u64 > limit {
+            return Err(RtFeedError::TooLarge {
+                actual: bytes.len() as u64,
+                limit,
+            });
+        }
 
         Self::from_bytes_with_limit(&bytes, RtSource::File(path.to_path_buf()), limit)
     }
@@ -186,5 +230,48 @@ impl RtFeed {
     /// Entities in the order the producer sent them.
     pub fn entities(&self) -> &[crate::transit_realtime::FeedEntity] {
         &self.message.entity
+    }
+
+    /// The Java-compatible message seen by validation rules.
+    pub fn message(&self) -> &FeedMessage {
+        &self.message
+    }
+
+    pub fn source(&self) -> &RtSource {
+        &self.source
+    }
+
+    pub fn encoded_len(&self) -> usize {
+        self.encoded_len
+    }
+
+    pub fn content_fingerprint(&self) -> ContentFingerprint {
+        self.content_fingerprint
+    }
+}
+
+fn read_bounded(reader: &mut impl Read, expected_len: u64, limit: u64) -> std::io::Result<Vec<u8>> {
+    let capacity = expected_len.min(limit).min(usize::MAX as u64) as usize;
+    let mut bytes = Vec::with_capacity(capacity);
+    reader
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{Cursor, Seek};
+
+    use super::read_bounded;
+
+    #[test]
+    fn bounded_reader_stops_after_the_limit_plus_one_byte() {
+        let mut input = Cursor::new(vec![0; 100]);
+
+        let bytes = read_bounded(&mut input, 0, 4).expect("read succeeds");
+
+        assert_eq!(bytes.len(), 5);
+        assert_eq!(input.stream_position().unwrap(), 5);
     }
 }

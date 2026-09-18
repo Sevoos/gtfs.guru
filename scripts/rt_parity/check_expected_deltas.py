@@ -7,7 +7,7 @@ nobody enforces decays into standing permission for differences no one has
 looked at since, so the format is checked mechanically:
 
 * every delta records what GTF-11 requires of one, including which oracle
-  binary and schema revision it was observed against;
+  binary and schema revisions it was observed against;
 * the ledger's baseline matches the RT baseline this build actually pins, so an
   approval cannot silently describe a different oracle;
 * a proposed delta names what it is waiting on, and an approved one does not.
@@ -43,7 +43,13 @@ REQUIRED_TEXT_FIELDS = (
     "recordedAt",
 )
 NULLABLE_FIELDS = ("canonicalRuleId", "noticeCode")
-INHERITED_FIELDS = ("javaCommit", "javaJarSha256", "rtSchemaCommit")
+INHERITED_FIELDS = (
+    "javaCommit",
+    "javaJarSha256",
+    "rtSchemaCommit",
+    "bindingsSchemaCommit",
+    "bindingsSchemaSha256",
+)
 
 
 def check(ledger: dict, rt_baseline: dict) -> list[str]:
@@ -59,14 +65,17 @@ def check(ledger: dict, rt_baseline: dict) -> list[str]:
         if not baseline.get(field):
             problems.append(f"baseline is missing {field}")
 
-    # An approval describes a difference against one oracle binary and one
-    # schema. If the build has moved on, every approval in the file is about
-    # something else until it is re-observed.
+    # An approval describes a difference against one oracle binary, the public
+    # model schema, and the old bindings schema used at the loading boundary.
+    # Moving any one makes every approval stale until it is re-observed.
     pinned = rt_baseline["canonicalBaseline"]
+    bindings_schema = rt_baseline["canonicalBindingsSchema"]
     expected = {
         "javaCommit": pinned["commit"],
         "javaJarSha256": pinned.get("jarSha256"),
         "rtSchemaCommit": rt_baseline["specRevision"]["commit"],
+        "bindingsSchemaCommit": bindings_schema["commit"],
+        "bindingsSchemaSha256": bindings_schema["sha256"],
     }
     for field, want in expected.items():
         got = baseline.get(field)

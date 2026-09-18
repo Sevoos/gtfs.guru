@@ -1074,33 +1074,39 @@ def sha256_file(path: pathlib.Path) -> str:
 
 
 def check_vendored_schema(baseline: dict, baseline_path: pathlib.Path) -> list[str]:
-    """Confirm the committed schema is still the file the baseline pins.
+    """Confirm both committed schemas are still the files the baseline pins.
 
-    Purely local, and the reason the digest is recorded at all: the vendored
-    `.proto` is a build input, so an edit to it silently moves GTFS Guru off the
-    official wire format.
+    Purely local, and the reason each digest is recorded at all: both `.proto`
+    files are build inputs, so editing either silently changes the public model
+    or the Java compatibility boundary.
     """
-    vendored = baseline.get("vendoredSchema")
-    if not vendored:
-        return ["baseline records no vendoredSchema block"]
-
-    path = baseline_path.parent / vendored["path"]
-    if not path.exists():
-        return [f"vendored schema is missing: {vendored['path']}"]
-
     reasons = []
-    actual_size = path.stat().st_size
-    if actual_size != vendored["sizeBytes"]:
-        reasons.append(
-            f"vendored schema is {actual_size} bytes, baseline records "
-            f"{vendored['sizeBytes']}"
-        )
-    actual_sha = sha256_file(path)
-    if actual_sha != vendored["sha256"]:
-        reasons.append(
-            f"vendored schema digest is {actual_sha[:12]}, baseline records "
-            f"{vendored['sha256'][:12]}: the committed file has been edited"
-        )
+    for key, label in (
+        ("vendoredSchema", "vendored schema"),
+        ("canonicalBindingsSchema", "Java compatibility schema"),
+    ):
+        vendored = baseline.get(key)
+        if not vendored:
+            reasons.append(f"baseline records no {key} block")
+            continue
+
+        path = baseline_path.parent / vendored["path"]
+        if not path.exists():
+            reasons.append(f"{label} is missing: {vendored['path']}")
+            continue
+
+        actual_size = path.stat().st_size
+        if actual_size != vendored["sizeBytes"]:
+            reasons.append(
+                f"{label} is {actual_size} bytes, baseline records "
+                f"{vendored['sizeBytes']}"
+            )
+        actual_sha = sha256_file(path)
+        if actual_sha != vendored["sha256"]:
+            reasons.append(
+                f"{label} digest is {actual_sha[:12]}, baseline records "
+                f"{vendored['sha256'][:12]}: the committed file has been edited"
+            )
     return reasons
 
 

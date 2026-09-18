@@ -8,23 +8,20 @@ This file holds only what the repository can say and the issue cannot — what
 exists on disk, what was measured here, and the local facts the work runs into.
 Where the two disagree, GTF-11 wins.
 
-Reconciled against GTF-11 as of its 2026-09-01 revision. An earlier draft of
-this file predated that revision and has been corrected; the notes below flag
-where it had been wrong, because those errors were the kind that produce work
-which then has to be undone.
+Reconciled against GTF-11 after Igor resolved its twelve implementation
+questions on 2026-09-16. The default profile follows the pinned Java executable;
+current-spec corrections require a separate profile.
 
 ## Status
 
-Phase 0 (freeze contracts and establish truth): five of ten items done — both
-upstream baselines pinned, the canonical JAR built and hashed, the official
-schema vendored and hashed, and prost's decoding behaviour verified. The five
-remaining are blocked on GTF-11's open questions, except the canonical
-performance baselines and the expected-delta record format.
+Phase 0's product decisions are resolved. Both upstream baselines and the
+canonical JAR are pinned, the delta format exists, and the 33-rule matrix is
+frozen. Canonical cold, warm, and memory measurements remain.
 
-Phase 1 (vertical slice): the crate, the generated bindings, `RtFeed` and
-`RtSnapshotContext` exist. The next two items — one header rule, and CLI/JSON
-output — are blocked, on the frozen rule matrix and the report contract
-respectively.
+Phase 1: the crate, current generated bindings, Java 0.0.4 compatibility
+descriptor, Java-compatible loading boundary, bounded file read, `RtFeed`, and
+`RtSnapshotContext` exist. E038, E039, E049, CLI/report wiring, and the first
+end-to-end differential slice remain.
 
 No rule is implemented, and nothing is wired into any surface.
 
@@ -38,7 +35,11 @@ crates/gtfs_validator_rt/
   proto/
     gtfs-realtime.proto        # vendored official schema
     UPSTREAM.md                # provenance and re-verification
+    java-0.0.4/
+      gtfs-realtime.proto      # schema embedded in Java bindings 0.0.4
+      UPSTREAM.md
   src/
+    canonical_decode.rs        # Java-compatible wire normalization
     lib.rs
     feed.rs                    # RtFeed, RtSource, ContentFingerprint
     context.rs                 # RtSnapshotContext, RtEntityRef
@@ -55,21 +56,18 @@ the reverse — so consumers who only validate a zip never build protobuf.
 
 ### Pinned baselines
 
-`spec_baseline.json` pins the schema revision, the vendored file's SHA-256, and
-the canonical Java commit; `proto/UPSTREAM.md` carries the provenance and the
-commands to re-verify. Generated code is never committed: it is reproduced from
-the vendored schema on every build, so the schema stays the single source of
-truth.
+`spec_baseline.json` pins the current schema, the schema used by Java bindings
+0.0.4, their SHA-256 values, and the canonical Java commit. The two
+`UPSTREAM.md` files carry provenance and re-verification commands. Generated
+code and the old-schema descriptor are reproduced at build time.
 
 One caveat on the canonical JAR. Its SHA-256 is recorded, but a Maven shade
 build stamps every archive entry with the build time, so the same commit rebuilt
 yields a different digest. The hash identifies one oracle binary — enough to
 prove two parity runs used the same one — and cannot be reproduced from the
 commit alone. `spec_baseline.json` records this as
-`"jarReproducibleFromCommit": false`. GTF-11's acceptance criterion asks for the
-baselines to be "pinned reproducibly", which the schema satisfies and the JAR
-does not; closing that gap needs either a reproducible Maven build or a digest
-over class contents rather than the archive.
+`"jarReproducibleFromCommit": false`. Igor accepted the binary digest as the
+oracle identity for the MVP; reproducible rebuilding is deferred.
 
 ### RtFeed
 
@@ -85,16 +83,15 @@ fingerprint over the raw input is what the duplicate-detection rules (E017,
 Phase 7) actually need, and it satisfies the issue's instruction not to retain
 an extra full input buffer without a demonstrated need.
 
-Size bounding lives here, at the edge where bytes enter, because the decoder
-imposes no ceiling of its own. `DEFAULT_MAX_RT_BYTES` is 256 MiB, overridable
-with `GTFS_VALIDATOR_MAX_RT_BYTES` to match the Schedule reader's convention;
-`from_path` checks metadata before reading, so an oversized file is refused
-without allocating the payload the limit exists to reject. `*_with_limit`
-variants let the CLI and URL adapters pass their own bound.
+Size bounding lives here, at the edge where bytes enter, because raw `prost`
+decoding imposes no input ceiling of its own. `DEFAULT_MAX_RT_BYTES` is 64 MiB,
+overridable with `GTFS_VALIDATOR_MAX_RT_BYTES`. `from_path` rejects an
+already-large file from metadata, then wraps the actual read in
+`take(limit + 1)` so growth between metadata and I/O cannot bypass the limit.
 
-`RtFeedError` separates decode failure from validation. Only structurally
-impossible input lands there — truncation, a lying length prefix, a wrong wire
-type. Input that is merely invalid decodes successfully and belongs to rules.
+`RtFeedError` separates load failure from validation. Malformed wire data and
+missing old-schema proto2 required fields reject the message before ordinary
+rules run, matching Java. The error can name all missing field paths.
 
 ### RtSnapshotContext
 
@@ -108,12 +105,11 @@ malformed entity really can populate more than one, and `tests/decoder.rs` pins
 that such input decodes. Collapsing the payload into an exclusive enum would
 hide it from the rules meant to report it.
 
-Alongside the payload lists it carries the shared facts GTF-11 anticipates:
-`duplicate_entity_ids` in first-seen order with every occurrence,
-`entities_without_id`, `entities_without_payload`, and counts of the payload
-types no candidate MVP rule reads (shapes, stops, trip modifications), so a
-message of only those is not mistaken for an empty one. Nothing iterates a hash map, so no
-output depends on hash order.
+Alongside the payload lists it carries `duplicate_entity_ids` in first-seen
+order with every occurrence, `entities_without_id`, and
+`entities_without_payload`. Current-only payload fields are removed by the Java
+compatibility boundary, so they cannot change default-profile results. Nothing
+iterates a hash map, so no output depends on hash order.
 
 `observed_at` is supplied by the caller and never read from the system clock, so
 freshness and future-timestamp rules give the same answer for a local file, a
@@ -121,50 +117,31 @@ recorded fixture, and an archived snapshot. The struct is `#[non_exhaustive]`
 with a `new()` constructor, so Phase 3 can add `static_index` without a breaking
 change to a published crate.
 
-## Phase 0 decoder findings (measured 2026-09-10)
+## Decoder compatibility (measured 2026-09-10, implemented 2026-09-17)
 
-Executable answers to GTF-11's Phase 0 requirement to verify prost's
-required-field, unknown-field, extension, and equality behaviour before rules
-are written. Pinned by `crates/gtfs_validator_rt/tests/decoder.rs`; the Java
-column comes from replaying identical bytes through
-`gtfs-realtime-bindings:0.0.4` with `scripts/rt_parity/decoder_java_check.java`.
+Raw `prost` accepts absent proto2 required fields, exposes unknown enum numbers,
+rejects known fields with the wrong wire type, rejects invalid UTF-8 strings,
+and drops unknown data. Java 0.0.4 rejects missing required fields, treats
+unknown enum and wrong-wire occurrences as unknown data, retains an earlier
+recognized enum value, and exposes invalid string bytes with replacement
+characters.
 
-| Input | prost | Java 0.0.4 |
-| :--- | :--- | :--- |
-| Empty | decodes to defaults | rejected: missing required `header` |
-| No `header` | decodes | rejected |
-| No `header.gtfs_realtime_version` | decodes | rejected |
-| No `trip_update.trip` | decodes | rejected |
-| Unknown field | decodes, **dropped** | parsed, **retained**, round-trip identical |
-| Extension field (1000-1999) | decodes, **dropped** | parsed, **retained**, round-trip identical |
-| Unknown enum value | `Some(99)` — present, invalid | `hasIncrementality()==false` — absent |
-| Truncated | `BufferUnderflow`, names the field | n/a |
+`canonical_decode.rs` closes these differences before rules run. It walks the
+wire message using a descriptor compiled from the exact Java 0.0.4 schema,
+removes fields and enum values unavailable to Java, ignores wrong-wire
+occurrences, reproduces protobuf 2.6.1 varint and malformed-UTF-8 behavior, and
+recursively checks required fields after message merging. It enforces Java's
+64-level recursion ceiling and writes normalization into one bounded buffer
+before decoding the result into the current Rust model.
 
-Four consequences.
+The original bytes are still fingerprinted before normalization. This preserves
+content identity for future E017 behavior even though extensions and other
+unknown data are intentionally invisible to default-profile rules.
 
-**prost does not enforce proto2 `required`.** Every required-field presence
-check must be an explicit rule; the decoder will never raise one. Worse, because
-`required` generates a non-`Option` field, an absent `gtfs_realtime_version` and
-one explicitly set to `""` decode to the same value, so no rule can separate
-them from the decoded message alone. This is the largest parity divergence
-found: Java rejects four of these fixtures outright where GTFS Guru decodes and
-continues.
-
-**Content identity must fingerprint the raw bytes**, as described under `RtFeed`
-above.
-
-**Extension data is invisible.** MTA/NYCT-style feeds decode without error, but
-their extension payloads are unreachable, so no selected rule may depend on
-them.
-
-**Nothing bounds message size.** A 50k-entity message decodes with allocation
-tracking the input.
-
-Two of these need a decision rather than documentation: whether the
-required-field divergence is reported as one decode-failure notice (Java-like)
-or per-field notices (Rust-like), and which reading of an unknown enum value is
-canonical. Both are approved-delta material under GTF-11's expected-delta
-lifecycle.
+The fixtures are pinned in `crates/gtfs_validator_rt/tests/decoder.rs` and
+replayed against the exact JAR with
+`scripts/rt_parity/decoder_java_check.java`. The two proposed decoder deltas were
+removed after parity was implemented.
 
 ## Local facts for the work ahead
 
@@ -188,11 +165,8 @@ timing collection in `ValidatorRunner`
 generic over the feed type would touch every static rule for no gain on a few
 megabytes of protobuf.
 
-**`StringPool` has no non-inserting lookup.**
-`crates/gtfs_validator_core/src/string_pool.rs` exposes only `new`, `intern`,
-and `resolve`. Phase 3 needs `lookup(&str) -> Option<StringId>`; interning every
-unknown RT identifier would let a long-running monitor grow the Schedule pool
-without bound. Small and additive — it can land on its own.
+**`StringPool` has a non-inserting lookup.** Phase 3 can resolve RT identifiers
+without interning every unknown value into the Schedule pool.
 
 **`stop_times_by_trip` already exists** on `GtfsFeed`
 (`crates/gtfs_validator_core/src/feed.rs`), covering the expensive half of the
@@ -210,19 +184,12 @@ feeds, which cannot be replayed in CI.
 **MCP URL fetching** already sits behind `--allow-url`
 (`crates/gtfs_validator_mcp/src/lib.rs`), which the RT tool should reuse.
 
-**The RT baseline is unwatched.** `scripts/spec_watch.py` hardcodes
-`crates/gtfs_validator_core/spec_baseline.json`, so nothing detects drift in the
-RT pin. It will also need to handle two independent pins into `google/transit`:
-the Schedule baseline is at `3215f98f`, the RT baseline at `262ae1e4`.
+**The RT baseline is watched.** `scripts/spec_watch.py` tracks the independent
+Schedule and Realtime pins; moving either remains an explicit baseline update.
 
-## Open decisions
+## Resolved decisions
 
-GTF-11's "Decisions Required Before Implementation" is the list — nine questions
-for Igor, none answered as of that issue's 2026-09-01 revision. No competing
-list is kept here.
-
-One superseded proposal worth naming, since it appeared in the earlier draft of
-this file: a 90-second freshness default. The canonical W008 threshold is 65
-seconds, and GTF-11's question 6 asks whether that is the default. Whatever is
-chosen, a configurable override must be reported as a non-default validation
-profile.
+GTF-11 contains Igor's twelve answers and is the contract. The default profile
+matches Java, the matrix is frozen, W008 uses 65 seconds, future timestamps use
+Java's 60-second tolerance, and MCP/Python remain in MVP scope. No competing
+decision list is kept here.

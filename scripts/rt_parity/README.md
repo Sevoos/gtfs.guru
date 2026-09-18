@@ -11,8 +11,10 @@ here is meaningful only against those pins.
 
 Replays the decoder fixtures through the canonical bindings
 (`gtfs-realtime-bindings:0.0.4`, bundled in the JAR) and prints what Java does
-with each one, so the Rust behaviour pinned by
-`crates/gtfs_validator_rt/tests/decoder.rs` can be compared against it.
+with each one, so the compatibility behavior pinned by
+`crates/gtfs_validator_rt/tests/decoder.rs` can be compared against it. Raw
+`prost` differences explain why the compatibility boundary exists; they are not
+accepted default-profile deltas.
 
 ```bash
 cargo test -p gtfs-guru-rt --test decoder -- --ignored dump_fixtures
@@ -55,10 +57,10 @@ is not permission for anything.
 `approved` is a difference that has been decided and may stand. An approved
 entry may not carry `blockedOn`.
 
-The ledger opens with two proposed entries, both from the Phase 0 decoder work
-and both waiting on GTF-11: prost does not enforce proto2 required fields, and
-the two decoders disagree about whether an unrecognised enum value is present or
-absent.
+The ledger is currently empty. The two Phase 0 decoder proposals were removed
+after GTF-11 selected Java compatibility and the loading boundary matched Java's
+required-field and unknown-enum behavior, including known-then-unknown enum
+ordering.
 
 ### Fields
 
@@ -78,7 +80,7 @@ Every entry records what GTF-11 requires of an approved delta.
 | `specReference` | Where the specification supports the reading taken. |
 | `removalCondition` | What would make this entry stale. |
 | `recordedAt` | When the difference was observed. |
-| `javaCommit`, `javaJarSha256`, `rtSchemaCommit` | Inherited from the ledger's `baseline` block unless an entry overrides them, so every delta resolves to one oracle binary and one schema without repeating them by hand. |
+| `javaCommit`, `javaJarSha256`, `rtSchemaCommit`, `bindingsSchemaCommit`, `bindingsSchemaSha256` | Inherited from the ledger's `baseline` block unless an entry overrides them, so every delta resolves to one oracle binary and both schemas without repeating them by hand. |
 
 ### Checking it
 
@@ -89,9 +91,9 @@ python3 scripts/rt_parity/check_expected_deltas.py
 Offline. It verifies the record format, rejects duplicate ids and inconsistent
 statuses, and — the part that matters most — fails when the ledger's baseline
 does not match the pins in `crates/gtfs_validator_rt/spec_baseline.json`. An
-approval describes a difference against one binary and one schema; if the build
-has moved on, every approval in the file is about something else until it is
-re-observed.
+approval describes a difference against one binary and both its public-model
+and loading-boundary schemas; if any pin moves, every approval in the file is
+about something else until it is re-observed.
 
 `check_expected_deltas_test.py` covers it offline by injecting one fault at a
 time.

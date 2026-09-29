@@ -11,6 +11,10 @@ mod canonical_decode;
 
 pub mod context;
 pub mod feed;
+pub mod notice_schema;
+pub mod rules;
+pub mod utils;
+pub mod validator;
 
 pub use context::{as_java_long, DuplicateEntityId, RtEntityRef, RtSnapshotContext};
 pub use feed::{ContentFingerprint, RtDecodeError, RtFeed, RtFeedError, RtSource};

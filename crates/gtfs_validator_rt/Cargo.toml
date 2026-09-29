@@ -14,30 +14,31 @@ categories = ["parsing"]
 # the published package; `cargo package` would otherwise omit the non-source
 # files and the build script would fail on a fresh download.
 include = [
-  "src/**/*.rs",
-  "build.rs",
-  "proto/gtfs-realtime.proto",
-  "proto/UPSTREAM.md",
   "proto/java-0.0.4/gtfs-realtime.proto",
   "proto/java-0.0.4/UPSTREAM.md",
-  "spec_baseline.json",
+  "proto/gtfs-realtime.proto",
+  "proto/UPSTREAM.md",
+  "src/**/*.rs",
   "tests/**/*.rs",
-  "README.md",
+  "build.rs",
+  "spec_baseline.json",
   "LICENSE-APACHE",
   "LICENSE-CC-BY-3.0",
+  "README.md",
+  "rt_notice_metadata.json"
 ]
 
 [dependencies]
 anyhow = { workspace = true }
-thiserror = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 chrono = { workspace = true }
-tracing = { workspace = true }
 prost = "0.14.4"
 prost-reflect = "0.16.5"
 rustc-hash = "2.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
 sha2 = "0.10"
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [dependencies.gtfs-guru-core]
 path = "../gtfs_validator_core"

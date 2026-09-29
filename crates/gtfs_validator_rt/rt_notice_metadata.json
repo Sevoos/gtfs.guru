@@ -1,0 +1,107 @@
+{
+  "full_dataset_entity_is_deleted": {
+    "canonicalId": "E039",
+    "dependencyClass": "current-header",
+    "occurrenceIdentity": "entity ID {entityId} has is_deleted={isDeleted}",
+    "javaBehavior": "HeaderValidator gates the scan on getIncrementality(), the defaulting getter, so a feed that omits incrementality is treated as FULL_DATASET and its entities are still scanned. Each entity is reported when hasIsDeleted() is true, which tests presence rather than value: an explicitly present is_deleted=false is reported as well. Entities are reported in received order.",
+    "shortSummary": "A FULL_DATASET feed includes entity.is_deleted.",
+    "description": "`entity.is_deleted` is meaningful only in a DIFFERENTIAL feed, where it marks an entity for removal. A FULL_DATASET message already carries the complete current state, so the field has no defined meaning there and should be omitted. The canonical validator reports the field's presence, not its value, so an explicit `is_deleted=false` is reported too.",
+    "references": {
+      "fileReferences": [],
+      "bestPracticesFileReferences": [],
+      "sectionReferences": [],
+      "urlReferences": [
+        {
+          "label": "FeedHeader",
+          "url": "https://github.com/google/transit/blob/262ae1e46e3f66099284fb8e4f976dfec788501f/gtfs-realtime/spec/en/reference.md#message-feedheader"
+        },
+        {
+          "label": "FeedEntity",
+          "url": "https://github.com/google/transit/blob/262ae1e46e3f66099284fb8e4f976dfec788501f/gtfs-realtime/spec/en/reference.md#message-feedentity"
+        }
+      ]
+    },
+    "properties": {
+      "entityIndex": {
+        "description": "Position of the entity in the received order."
+      },
+      "entityId": {
+        "description": "The entity's id, as received."
+      },
+      "isDeleted": {
+        "description": "The value of the present is_deleted field. Reported for both true and false, because the rule keys on presence."
+      }
+    }
+  },
+  "invalid_realtime_version": {
+    "canonicalId": "E038",
+    "dependencyClass": "current-header",
+    "occurrenceIdentity": "header.gtfs_realtime_version of {gtfsRealtimeVersion}",
+    "javaBehavior": "GtfsUtils.isValidVersion accepts only the exact strings \"1.0\" and \"2.0\", and additionally treats an absent gtfs_realtime_version as valid. That absent branch is unreachable here: the field is proto2 required, so a message omitting it is rejected by the loading boundary before any rule runs. An explicitly present empty string does reach the rule, and Java's occurrence prefix then ends in a trailing space.",
+    "shortSummary": "The declared GTFS-Realtime version is not 1.0 or 2.0.",
+    "description": "`header.gtfs_realtime_version` must name a version the specification defines; currently only `1.0` and `2.0` are valid. The canonical validator compares the string exactly, so a value that would parse as the right number is still reported: `2.00`, `2.0f` and ` 2.0 ` are all invalid versions even though Float.parseFloat accepts the last two.",
+    "references": {
+      "fileReferences": [],
+      "bestPracticesFileReferences": [],
+      "sectionReferences": [],
+      "urlReferences": [
+        {
+          "label": "FeedHeader",
+          "url": "https://github.com/google/transit/blob/262ae1e46e3f66099284fb8e4f976dfec788501f/gtfs-realtime/spec/en/reference.md#message-feedheader"
+        }
+      ]
+    },
+    "properties": {
+      "fieldPath": {
+        "description": "The field carrying the invalid value."
+      },
+      "gtfsRealtimeVersion": {
+        "description": "The declared version, as received. May be the empty string."
+      }
+    }
+  },
+  "missing_header_incrementality": {
+    "canonicalId": "E049",
+    "dependencyClass": "current-header",
+    "occurrenceIdentity": "",
+    "javaBehavior": "Guarded by GtfsUtils.isV2orHigher, which calls Float.parseFloat with no guard; HeaderValidator catches the resulting NumberFormatException and only logs it, so an unparseable version silently skips this rule. Float.parseFloat is looser than the exact comparison E038 uses -- it accepts a trailing f/F/d/D, surrounding whitespace and hex floats -- so a version such as 2.0f reports both notices. Java emits no occurrence prefix for this rule, so its occurrence identity is empty.",
+    "shortSummary": "header.incrementality is missing on a v2.0 or higher feed.",
+    "description": "`incrementality` is optional in the protobuf schema and defaults to `FULL_DATASET`, but GTFS-Realtime v2.0 requires a producer to state it explicitly rather than rely on that default. Note that the default still applies to other rules: a feed omitting incrementality is scanned for `entity.is_deleted` as though it had declared FULL_DATASET.",
+    "references": {
+      "fileReferences": [],
+      "bestPracticesFileReferences": [],
+      "sectionReferences": [],
+      "urlReferences": [
+        {
+          "label": "FeedHeader",
+          "url": "https://github.com/google/transit/blob/262ae1e46e3f66099284fb8e4f976dfec788501f/gtfs-realtime/spec/en/reference.md#message-feedheader"
+        }
+      ]
+    },
+    "properties": {
+      "fieldPath": {
+        "description": "The absent field."
+      },
+      "gtfsRealtimeVersion": {
+        "description": "The declared version that made incrementality required."
+      }
+    }
+  },
+    "runtime_exception_in_rt_validator_error": {
+        "dependencyClass": "infrastructure",
+        "occurrenceIdentity": "",
+        "javaBehavior": "No canonical counterpart. In the pinned Java validator an exception inside a FeedEntityValidator propagates out of the batch run; GTFS Guru instead reports the failure and continues with the remaining rules.",
+        "shortSummary": "A Realtime validator panicked.",
+        "description": "A GTFS Guru infrastructure notice, not a GTFS-Realtime rule. It means a Realtime validator panicked, so its findings for this snapshot are incomplete; the remaining validators still ran. This normally indicates a bug in GTFS Guru rather than a problem with the feed.",
+        "references": {
+            "fileReferences": [],
+            "bestPracticesFileReferences": [],
+            "sectionReferences": [],
+            "urlReferences": []
+        },
+        "properties": {
+            "validator": { "description": "The name of the validator that panicked." },
+            "message": { "description": "The panic payload, when it was a string." }
+        }
+    }
+}

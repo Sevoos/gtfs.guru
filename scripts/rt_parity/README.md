@@ -7,6 +7,23 @@ The pins live in `crates/gtfs_validator_rt/spec_baseline.json`: the Java commit,
 the built JAR's SHA-256, and the GTFS-Realtime schema revision. Every artefact
 here is meaningful only against those pins.
 
+## The canonical JAR
+
+Both scripts below need the canonical validator on the classpath, as
+`$GTFS_RT_VALIDATOR_JAR`. It is not committed and not reproducible from its
+commit; `canonicalBaseline.jarReproducibleFromCommit` in
+`crates/gtfs_validator_rt/spec_baseline.json` already records that.
+
+Rebuilt from `7041fa3f` on 2026-09-27 with JDK 25 (`mvn package -DskipTests`),
+producing `gtfs-realtime-validator-lib-1.0.0-SNAPSHOT-withAllDependencies.jar`
+with SHA-256
+`652d922a88d71ad2ac72382f0c83b9ce9166b9db5222ab660d14ef5887c5b6dd`. That differs
+from the pinned `31b31b4b5f2d1856…` because Maven builds are not
+byte-reproducible. The artefact name matches `canonicalBaseline.jarArtifact`,
+and the bundled `protobuf-java 2.6.1` and `gtfs-realtime-bindings 0.0.4` were
+verified against the pins — those versions, not the digest, are what determine
+the behavior being matched.
+
 ## `decoder_java_check.java`
 
 Replays the decoder fixtures through the canonical bindings
@@ -24,6 +41,51 @@ java -cp "$GTFS_RT_VALIDATOR_JAR" scripts/rt_parity/decoder_java_check.java \
 
 Needs a JDK 11+ for the single-file source launcher. Not part of CI: the JAR is
 not reproducible from its commit and is not committed.
+
+## `header_java_check.java`
+
+Replays the header-rule fixtures through the canonical `HeaderValidator` and
+prints the notices it produces, so the E038/E039/E049 behavior pinned by
+`crates/gtfs_validator_rt/tests/rules_header.rs` can be compared against it.
+
+```bash
+cargo test -p gtfs-guru-rt --test rules_header -- --ignored dump_fixtures
+java -cp "$GTFS_RT_VALIDATOR_JAR" scripts/rt_parity/header_java_check.java \
+     target/rt-header-fixtures
+```
+
+Each notice prints as `<canonical id>[<occurrence prefix>]`, in the order the
+validator emits them — which is E038, E039, E049 regardless of the order they
+were computed in. E049's prefix is empty by design. The fixtures whose version
+does not parse also log an SLF4J `ERROR` to stderr: `HeaderValidator` catches
+that `NumberFormatException` and only logs it, silently skipping E049, and that
+suppression is itself part of what this pins.
+
+Observed against the JAR described above:
+
+```text
+FIXTURE                            NOTICES
+absent_incrementality_is_deleted   E039[entity ID e1 has is_deleted=true] E049[]
+differential_is_deleted_true       (none)
+empty_version                      E038[header.gtfs_realtime_version of ]
+full_dataset_is_deleted_false      E039[entity ID e1 has is_deleted=false]
+full_dataset_is_deleted_true       E039[entity ID e1 has is_deleted=true]
+suffixed_version                   E038[header.gtfs_realtime_version of 2.0f] E049[]
+unparseable_version                E038[header.gtfs_realtime_version of abcd]
+v1_0_no_incrementality             (none)
+v2_0_full_dataset                  (none)
+v2_0_no_incrementality             E049[]
+```
+
+Three rows carry behavior that a reasonable implementation gets wrong:
+`full_dataset_is_deleted_false` fires because `hasIsDeleted()` tests presence
+rather than value; `absent_incrementality_is_deleted` fires E039 because Java
+reads incrementality through its defaulting getter, so an omitted field is
+`FULL_DATASET`; and `suffixed_version` reports both notices because
+`Float.parseFloat` accepts a trailing `f` that the exact E038 comparison does
+not.
+
+Needs a JDK 11+ for the single-file source launcher. Not part of CI.
 
 ## `expected_deltas.json`
 
